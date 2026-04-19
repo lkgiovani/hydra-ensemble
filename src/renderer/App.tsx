@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import SessionTabs from './components/SessionTabs'
+import {
+  Code2,
+  FolderTree,
+  GitPullRequest,
+  LayoutDashboard,
+  Wand2
+} from 'lucide-react'
 import SessionPane from './components/SessionPane'
 import StatusBar from './components/StatusBar'
 import Dashboard from './components/Dashboard'
@@ -7,7 +13,8 @@ import Sidebar from './components/Sidebar'
 import CodeEditor from './components/CodeEditor'
 import PRInspector from './components/PRInspector'
 import VoiceButton from './components/VoiceButton'
-import ToolkitBar from './components/Toolkit/Bar'
+import SessionsPanel from './components/SessionsPanel'
+import ToolkitGrid from './components/ToolkitGrid'
 import ToolkitEditorDialog from './components/Toolkit/EditorDialog'
 import WatchdogPanel from './components/Watchdog/Panel'
 import { useSessions } from './state/sessions'
@@ -20,6 +27,7 @@ import { useWatchdog } from './state/watchdog'
 
 export default function App() {
   const [claudePath, setClaudePath] = useState<string | null | undefined>(undefined)
+  const [drawerOpen, setDrawerOpen] = useState(false)
 
   const sessions = useSessions((s) => s.sessions)
   const activeId = useSessions((s) => s.activeId)
@@ -50,9 +58,8 @@ export default function App() {
   const openGh = useGh((s) => s.openPanel)
   const closeGh = useGh((s) => s.closePanel)
 
-  // Active "context cwd" for actions like PR inspector / toolkit:
-  // prefer the active session, otherwise the current project, otherwise none.
-  const contextCwd = activeSession?.worktreePath ?? activeSession?.cwd ?? currentProject?.path ?? null
+  const contextCwd =
+    activeSession?.worktreePath ?? activeSession?.cwd ?? currentProject?.path ?? null
 
   useEffect(() => {
     void initSessions()
@@ -68,47 +75,61 @@ export default function App() {
       if (!mod) return
       const key = e.key.toLowerCase()
 
-      // Cmd/Ctrl + D: dashboard
       if (key === 'd' && !e.shiftKey) {
         e.preventDefault()
         toggleDashboard()
         return
       }
-      // Cmd/Ctrl + E: code editor
       if (key === 'e' && !e.shiftKey) {
         e.preventDefault()
         toggleEditor()
         return
       }
-      // Cmd/Ctrl + T: new session
+      if (key === 'b' && !e.shiftKey) {
+        e.preventDefault()
+        setDrawerOpen((v) => !v)
+        return
+      }
       if (key === 't' && !e.shiftKey) {
         e.preventDefault()
         void createSession({ cwd: contextCwd ?? undefined })
         return
       }
-      // Cmd/Ctrl + W: close active session
       if (key === 'w' && !e.shiftKey) {
         if (!activeId) return
         e.preventDefault()
         void destroySession(activeId)
         return
       }
-      // Cmd/Ctrl + 1..9: switch session
-      if (/^[1-9]$/.test(e.key) && !e.shiftKey) {
-        const idx = Number.parseInt(e.key, 10) - 1
+      if (/^[0-9]$/.test(e.key) && !e.shiftKey) {
+        const idx = e.key === '0' ? 9 : Number.parseInt(e.key, 10) - 1
         const target = sessions[idx]
         if (!target) return
         e.preventDefault()
         setActive(target.id)
         return
       }
-      // Cmd/Ctrl + `: toggle quick terminal
+      if (e.key === '[' && !e.shiftKey) {
+        if (!activeId) return
+        e.preventDefault()
+        const i = sessions.findIndex((s) => s.id === activeId)
+        const prev = sessions[(i - 1 + sessions.length) % sessions.length]
+        if (prev) setActive(prev.id)
+        return
+      }
+      if (e.key === ']' && !e.shiftKey) {
+        if (!activeId) return
+        e.preventDefault()
+        const i = sessions.findIndex((s) => s.id === activeId)
+        const next = sessions[(i + 1) % sessions.length]
+        if (next) setActive(next.id)
+        return
+      }
       if (e.key === '`' && !e.shiftKey) {
         e.preventDefault()
         void window.api.quickTerm.toggle()
         return
       }
-      // Cmd/Ctrl + Shift + P: toggle PR inspector
       if (key === 'p' && e.shiftKey) {
         if (!contextCwd) return
         e.preventDefault()
@@ -116,7 +137,6 @@ export default function App() {
         else openGh(contextCwd)
         return
       }
-      // Cmd/Ctrl + Shift + W: toggle watchdog panel
       if (key === 'w' && e.shiftKey) {
         e.preventDefault()
         togglePanel()
@@ -140,88 +160,181 @@ export default function App() {
   ])
 
   return (
-    <div className="flex h-screen w-screen bg-[#0d0d0f] text-white">
-      <Sidebar />
+    <div className="flex h-screen w-screen overflow-hidden bg-bg-0 text-text-1">
+      {/* Project drawer (collapsible) */}
+      <div
+        className={`shrink-0 overflow-hidden border-r border-border-soft transition-[width] duration-200 ${
+          drawerOpen ? 'w-64' : 'w-0'
+        }`}
+      >
+        <Sidebar />
+      </div>
+
+      {/* Main column: header, terminal, status bar */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-between border-b border-white/10 bg-[#16161a] px-4 py-2 text-xs text-white/60">
+        <header className="flex h-11 shrink-0 items-center justify-between border-b border-border-soft bg-bg-2 px-3">
           <div className="flex items-center gap-3">
-            <div className="font-medium text-white/80">Hydra Ensemble</div>
-            <ToolkitBar />
-          </div>
-          <div className="flex gap-3">
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-accent-400 df-pulse" />
+              <span className="font-sans text-sm font-semibold tracking-tight text-text-1">
+                Hydra Ensemble
+              </span>
+            </div>
             <button
               type="button"
+              onClick={() => setDrawerOpen((v) => !v)}
+              className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition ${
+                drawerOpen
+                  ? 'bg-bg-4 text-text-1'
+                  : 'text-text-3 hover:bg-bg-3 hover:text-text-1'
+              }`}
+              title="toggle projects (Cmd/Ctrl+B)"
+            >
+              <FolderTree size={13} strokeWidth={1.75} />
+              <span>{currentProject?.name ?? 'Projects'}</span>
+            </button>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <HeaderButton
+              icon={<GitPullRequest size={13} strokeWidth={1.75} />}
+              label="PRs"
+              shortcut="⌘⇧P"
               onClick={() => contextCwd && openGh(contextCwd)}
               disabled={!contextCwd}
-              className="rounded px-2 py-0.5 text-xs text-white/60 hover:bg-white/5 hover:text-white/90 disabled:opacity-40"
-              title="PR inspector (Cmd/Ctrl+Shift+P)"
-            >
-              PRs
-            </button>
-            <button
-              type="button"
-              onClick={() => togglePanel()}
-              className="rounded px-2 py-0.5 text-xs text-white/60 hover:bg-white/5 hover:text-white/90"
-              title="Watchdogs (Cmd/Ctrl+Shift+W)"
-            >
-              watchdogs
-            </button>
-            <button
-              type="button"
-              onClick={() => toggleEditor()}
-              className="rounded px-2 py-0.5 text-xs text-white/60 hover:bg-white/5 hover:text-white/90"
-              title="Code editor (Cmd/Ctrl+E)"
-            >
-              editor
-            </button>
-            <button
-              type="button"
-              onClick={() => toggleDashboard()}
-              className="rounded px-2 py-0.5 text-xs text-white/60 hover:bg-white/5 hover:text-white/90"
-              title="Dashboard (Cmd/Ctrl+D)"
-            >
-              dashboard
-            </button>
-            <span>os: {window.api.platform.os}</span>
-            <span>
-              claude:{' '}
-              {claudePath === undefined ? (
-                <span className="text-white/40">resolving…</span>
-              ) : claudePath === null ? (
-                <span className="text-yellow-400">not found in PATH</span>
-              ) : (
-                <span className="text-emerald-400">{claudePath}</span>
-              )}
-            </span>
+            />
+            <HeaderButton
+              icon={<Wand2 size={13} strokeWidth={1.75} />}
+              label="Watchdogs"
+              shortcut="⌘⇧W"
+              onClick={togglePanel}
+            />
+            <HeaderButton
+              icon={<Code2 size={13} strokeWidth={1.75} />}
+              label="Editor"
+              shortcut="⌘E"
+              onClick={toggleEditor}
+            />
+            <HeaderButton
+              icon={<LayoutDashboard size={13} strokeWidth={1.75} />}
+              label="Dashboard"
+              shortcut="⌘D"
+              onClick={toggleDashboard}
+            />
+            <div className="ml-2 flex items-center gap-2 border-l border-border-soft pl-3 font-mono text-[11px] text-text-3">
+              <span>{window.api.platform.os}</span>
+              <span>·</span>
+              <span
+                className={
+                  claudePath === undefined
+                    ? 'text-text-4'
+                    : claudePath === null
+                      ? 'text-status-attention'
+                      : 'text-status-generating'
+                }
+              >
+                {claudePath === undefined
+                  ? 'resolving…'
+                  : claudePath === null
+                    ? 'no claude'
+                    : 'claude'}
+              </span>
+            </div>
           </div>
         </header>
-        <SessionTabs />
-        <main className="relative flex-1 overflow-hidden">
-          {sessions.length === 0 ? (
-            <div className="flex h-full items-center justify-center text-sm text-white/40">
-              click <span className="mx-1 rounded bg-white/10 px-2 py-0.5">+ new claude session</span> to start
-            </div>
-          ) : (
-            sessions.map((s) => (
-              <div
-                key={s.id}
-                className="absolute inset-0"
-                style={{ display: s.id === activeId ? 'block' : 'none' }}
-              >
-                <SessionPane session={s} visible={s.id === activeId} />
+
+        <main className="relative flex min-h-0 flex-1">
+          {/* Terminal area */}
+          <div className="relative flex min-w-0 flex-1 flex-col bg-bg-1">
+            {sessions.length === 0 ? (
+              <div className="flex flex-1 items-center justify-center px-6 text-center">
+                <div className="max-w-md">
+                  <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-full bg-bg-3 text-accent-400">
+                    <span className="text-xl">●</span>
+                  </div>
+                  <div className="mb-1 text-base font-semibold text-text-1">
+                    no Claude sessions running
+                  </div>
+                  <div className="mb-4 text-sm text-text-3">
+                    spawn a session in the right panel — each runs in an isolated
+                    <span className="ml-1 rounded bg-bg-3 px-1.5 py-0.5 font-mono text-[11px]">
+                      CLAUDE_CONFIG_DIR
+                    </span>{' '}
+                    so they never collide.
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => createSession({ cwd: contextCwd ?? undefined })}
+                    className="inline-flex items-center gap-2 rounded-md bg-accent-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-600"
+                  >
+                    Spawn first session
+                    <span className="font-mono text-[10px] opacity-70">⌘T</span>
+                  </button>
+                </div>
               </div>
-            ))
-          )}
-          {activeSession ? <VoiceButton /> : null}
+            ) : (
+              <div className="relative min-h-0 flex-1 overflow-hidden">
+                {sessions.map((s) => (
+                  <div
+                    key={s.id}
+                    className="absolute inset-0"
+                    style={{ display: s.id === activeId ? 'block' : 'none' }}
+                  >
+                    <SessionPane session={s} visible={s.id === activeId} />
+                  </div>
+                ))}
+              </div>
+            )}
+            {activeSession ? <VoiceButton /> : null}
+          </div>
+
+          {/* Right panel: sessions on top, toolkit below */}
+          <div className="flex w-80 shrink-0 flex-col">
+            <div className="min-h-0 flex-1 overflow-hidden">
+              <SessionsPanel />
+            </div>
+            <div className="h-[42%] min-h-[220px] overflow-hidden">
+              <ToolkitGrid
+                cwd={contextCwd}
+                projectName={currentProject?.name}
+                branch={activeSession?.branch}
+              />
+            </div>
+          </div>
         </main>
+
         <StatusBar />
       </div>
 
+      {/* Overlays */}
       <Dashboard open={dashboardOpen} onClose={closeDashboard} />
       <CodeEditor open={editorOpen} onClose={closeEditor} />
       <PRInspector cwd={contextCwd} open={ghOpen} onClose={closeGh} />
       <WatchdogPanel />
       <ToolkitEditorDialog />
     </div>
+  )
+}
+
+interface HeaderButtonProps {
+  icon: React.ReactNode
+  label: string
+  shortcut?: string
+  onClick: () => void
+  disabled?: boolean
+}
+
+function HeaderButton({ icon, label, shortcut, onClick, disabled }: HeaderButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={shortcut ? `${label} (${shortcut})` : label}
+      className="group flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-text-3 transition hover:bg-bg-3 hover:text-text-1 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-text-3"
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
   )
 }
