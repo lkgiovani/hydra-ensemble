@@ -186,8 +186,12 @@ export default function App() {
         togglePanelFor('watchdogs')
       }
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    // capture: true so we intercept BEFORE xterm.js (which has its own
+    // keydown handler on the focused terminal element) eats the keystroke.
+    // Without this, every shortcut (⌘T, ⌘D, ⌘E, ⌘`, ⌘1..9, ?) is silently
+    // swallowed when an agent terminal has focus.
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
   }, [
     togglePanelFor,
     openPanel,
