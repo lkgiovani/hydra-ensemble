@@ -141,7 +141,12 @@ export interface ToolkitItem {
   id: string
   label: string
   command: string
+  /** Name from the curated lucide icon set (see renderer/lib/toolkit-icons). */
   icon?: string
+  /** Optional accent colour (hex) used for hover ring and run state. */
+  accent?: string
+  /** Optional one-word group tag for visual grouping. */
+  group?: string
 }
 
 export interface ToolkitRunResult {

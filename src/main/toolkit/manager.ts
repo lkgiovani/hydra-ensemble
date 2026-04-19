@@ -6,9 +6,14 @@ import { getStore, patchStore } from '../store'
 import type { ToolkitItem, ToolkitRunResult } from '../../shared/types'
 
 const DEFAULT_TOOLKIT: ToolkitItem[] = [
-  { id: 'test', label: 'test', command: 'npm test' },
-  { id: 'build', label: 'build', command: 'npm run build' },
-  { id: 'lint', label: 'lint', command: 'npm run lint' }
+  { id: 'test', label: 'Test', command: 'npm test', icon: 'beaker', group: 'verify' },
+  { id: 'build', label: 'Build', command: 'npm run build', icon: 'hammer', group: 'verify' },
+  { id: 'lint', label: 'Lint', command: 'npm run lint', icon: 'wand', group: 'verify' },
+  { id: 'typecheck', label: 'Typecheck', command: 'npm run typecheck', icon: 'fileCheck', group: 'verify' },
+  { id: 'install', label: 'Install', command: 'npm install', icon: 'package', group: 'deps' },
+  { id: 'dev', label: 'Dev server', command: 'npm run dev', icon: 'play', group: 'run' },
+  { id: 'commit-push', label: 'Commit & Push', command: 'git add -A && git commit -m "wip" && git push', icon: 'send', group: 'git' },
+  { id: 'status', label: 'Git status', command: 'git status', icon: 'gitBranch', group: 'git' }
 ]
 
 const RUN_TIMEOUT_MS = 30_000
