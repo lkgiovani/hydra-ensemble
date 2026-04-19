@@ -42,5 +42,5 @@ nsis:
   shortcutName: Hydra Ensemble
 publish:
   provider: github
-  owner: intuitive-compute
-  repo: hydra-ensemble
+  owner: javabetatester
+  repo: Hydra Ensemble
