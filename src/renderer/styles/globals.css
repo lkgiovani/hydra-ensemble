@@ -3,55 +3,65 @@
 @import "@fontsource-variable/jetbrains-mono/index.css";
 
 /* ============================================================
- * Design tokens
+ * Design tokens — neobrutalist CLI
+ * Mono-first, warm neutrals, coral accent, sharp borders.
  * ============================================================ */
 @theme {
   --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono Variable', ui-monospace, 'Menlo', monospace;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, 'Menlo', 'Consolas', monospace;
+  --font-display: 'Inter Variable', ui-sans-serif, sans-serif;
 
-  /* Surfaces */
-  --color-bg-0: #08090b;        /* page */
-  --color-bg-1: #0d0e12;        /* main panes */
-  --color-bg-2: #131419;        /* sidebar / header */
-  --color-bg-3: #1a1c22;        /* cards / inputs */
-  --color-bg-4: #23262e;        /* hover */
-  --color-bg-5: #2c2f38;        /* active */
+  /* Surfaces — warm neutral, pronounced contrast */
+  --color-bg-0: #0a0a0b;
+  --color-bg-1: #0e0e10;
+  --color-bg-2: #121214;
+  --color-bg-3: #1a1a1d;
+  --color-bg-4: #232327;
+  --color-bg-5: #2e2e33;
 
-  /* Borders */
-  --color-border-soft: rgba(255, 255, 255, 0.06);
-  --color-border-mid:  rgba(255, 255, 255, 0.10);
-  --color-border-hard: rgba(255, 255, 255, 0.16);
+  /* Borders — solid, visible */
+  --color-border-soft: rgba(255, 255, 255, 0.07);
+  --color-border-mid:  rgba(255, 255, 255, 0.13);
+  --color-border-hard: rgba(255, 255, 255, 0.22);
 
   /* Text */
-  --color-text-1: #f4f4f5;
-  --color-text-2: #c5c7cc;
-  --color-text-3: #8a8d96;
-  --color-text-4: #5a5d66;
+  --color-text-1: #f5f5f2;
+  --color-text-2: #bfbfba;
+  --color-text-3: #888884;
+  --color-text-4: #54544f;
 
-  /* Brand accent — calmer indigo/violet, not neon */
-  --color-accent-50:  #eef2ff;
-  --color-accent-200: #c7d0ff;
-  --color-accent-400: #7c88ff;
-  --color-accent-500: #5a68f5;
-  --color-accent-600: #4a55d6;
-  --color-accent-700: #3d46b3;
+  /* Accent — coral / terminal orange (Claude vibe) */
+  --color-accent-50:  #fef4f0;
+  --color-accent-200: #ffcab7;
+  --color-accent-400: #ff9476;
+  --color-accent-500: #ff6b4d;
+  --color-accent-600: #e5543a;
+  --color-accent-700: #b8402a;
 
   /* Status semantics */
-  --color-status-idle:    #6b7180;
-  --color-status-thinking:#e6b400;
-  --color-status-generating:#22c55e;
-  --color-status-input:   #3b9eff;
-  --color-status-attention:#f04848;
+  --color-status-idle:       #5e6070;
+  --color-status-thinking:   #ffb829;
+  --color-status-generating: #2ecc71;
+  --color-status-input:      #4ea5ff;
+  --color-status-attention:  #ff4d5d;
+  --color-status-editing:    #c084fc;
+  --color-status-reading:    #60a5fa;
+  --color-status-running:    #fbbf24;
 
-  /* Radii / shadows */
-  --radius-sm: 0.375rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --shadow-soft: 0 1px 2px rgba(0,0,0,.4), 0 0 0 1px var(--color-border-soft) inset;
-  --shadow-card: 0 8px 32px rgba(0,0,0,.45), 0 0 0 1px var(--color-border-soft) inset;
-  --shadow-pop:  0 24px 64px rgba(0,0,0,.6),  0 0 0 1px var(--color-border-mid) inset;
+  /* Radii — brutalist: small, sharp */
+  --radius-sm: 0.125rem;  /* 2px */
+  --radius-md: 0.25rem;   /* 4px */
+  --radius-lg: 0.375rem;  /* 6px */
+
+  /* Shadows — flat, use inset rings instead of drop shadows */
+  --shadow-soft: 0 0 0 1px var(--color-border-soft) inset;
+  --shadow-card: 0 0 0 1px var(--color-border-mid) inset;
+  --shadow-pop:  0 2px 0 0 rgba(0,0,0,0.6), 0 0 0 1px var(--color-border-hard) inset;
 }
 
+/* ============================================================
+ * Base
+ * ============================================================ */
 html, body, #root {
   margin: 0;
   padding: 0;
@@ -64,6 +74,32 @@ html, body, #root {
   font-feature-settings: "cv11", "ss01", "ss03";
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.005em;
+}
+
+/* Monospace body for data-heavy surfaces — applied via class .df-mono-surface */
+.df-mono-surface, .df-mono-surface * {
+  font-family: var(--font-mono);
+  letter-spacing: 0;
+}
+
+/* Uppercase tracked labels for section headers */
+.df-label {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-text-4);
+}
+
+/* Neobrutalist divider — thin solid + stippled pattern */
+.df-divider {
+  height: 1px;
+  background-image: repeating-linear-gradient(
+    90deg,
+    var(--color-border-mid) 0 3px,
+    transparent 3px 6px
+  );
 }
 
 /* ============================================================
@@ -84,24 +120,25 @@ html, body, #root {
 .xterm-viewport::-webkit-scrollbar-thumb,
 .df-scroll::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.08);
-  border-radius: 6px;
+  border-radius: 2px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 
 .xterm-viewport::-webkit-scrollbar-thumb:hover,
 .df-scroll::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.18);
   background-clip: padding-box;
   border: 2px solid transparent;
 }
 
 /* ============================================================
- * Common interactive primitives
+ * Interactive primitives
  * ============================================================ */
 button {
   font-family: inherit;
   cursor: pointer;
+  letter-spacing: inherit;
 }
 
 button:focus-visible,
@@ -109,40 +146,60 @@ button:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
-  outline: 2px solid var(--color-accent-400);
+  outline: 1px solid var(--color-accent-500);
   outline-offset: 1px;
   border-radius: var(--radius-sm);
 }
 
 ::selection {
-  background: rgba(124, 136, 255, 0.35);
+  background: rgba(255, 107, 77, 0.35);
   color: var(--color-text-1);
 }
 
 /* ============================================================
- * Animation utilities
+ * Animations
  * ============================================================ */
 @keyframes df-pulse {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.45; }
+  50% { opacity: 0.4; }
 }
-
 @keyframes df-fade-in {
   from { opacity: 0; transform: translateY(2px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-
 @keyframes df-slide-in-right {
   from { opacity: 0; transform: translateX(8px); }
   to   { opacity: 1; transform: translateX(0); }
 }
+@keyframes df-scan {
+  0%   { background-position: 0% 0; }
+  100% { background-position: 0% 100%; }
+}
 
-.df-pulse { animation: df-pulse 1.6s ease-in-out infinite; }
-.df-fade-in { animation: df-fade-in 0.18s ease-out both; }
+.df-pulse    { animation: df-pulse 1.6s ease-in-out infinite; }
+.df-fade-in  { animation: df-fade-in 0.18s ease-out both; }
 .df-slide-in { animation: df-slide-in-right 0.22s ease-out both; }
 
-/* Subtle lift on hover */
 .df-lift {
-  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+  transition: transform 0.12s ease, background-color 0.12s ease, border-color 0.12s ease;
 }
 .df-lift:hover { transform: translateY(-1px); }
+
+/* Active card glow — coral accent ring */
+.df-glow-accent {
+  box-shadow:
+    0 0 0 1px rgba(255, 107, 77, 0.35),
+    0 0 18px -6px rgba(255, 107, 77, 0.5);
+}
+
+/* ============================================================
+ * CLI hero — scanline + grid background for the empty state
+ * ============================================================ */
+.df-hero-bg {
+  background-image:
+    radial-gradient(ellipse at 50% 30%, rgba(255, 107, 77, 0.08), transparent 50%),
+    linear-gradient(var(--color-border-soft) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-border-soft) 1px, transparent 1px);
+  background-size: auto, 24px 24px, 24px 24px;
+  background-position: 0 0, -1px -1px, -1px -1px;
+}
