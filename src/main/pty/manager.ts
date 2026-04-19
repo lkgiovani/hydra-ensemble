@@ -31,6 +31,15 @@ export class PtyManager {
 
     let p: IPty
     try {
+      // eslint-disable-next-line no-console
+      console.log('[pty] spawn', {
+        sessionId: opts.sessionId,
+        shell,
+        args,
+        cwd,
+        cols: opts.cols,
+        rows: opts.rows
+      })
       p = nodePty.spawn(shell, args, {
         name: 'xterm-256color',
         cols: Math.max(opts.cols, 1),
@@ -40,13 +49,18 @@ export class PtyManager {
         useConpty: process.platform === 'win32'
       })
     } catch (err) {
+      console.error('[pty] spawn failed:', (err as Error).message)
       return { ok: false, error: (err as Error).message }
     }
 
+    let totalBytes = 0
     p.onData((data) => {
+      totalBytes += data.length
       this.window?.webContents.send('pty:data', { sessionId: opts.sessionId, data })
     })
     p.onExit(({ exitCode, signal }) => {
+      // eslint-disable-next-line no-console
+      console.log('[pty] exit', { sessionId: opts.sessionId, exitCode, signal, totalBytes })
       this.window?.webContents.send('pty:exit', {
         sessionId: opts.sessionId,
         exitCode,

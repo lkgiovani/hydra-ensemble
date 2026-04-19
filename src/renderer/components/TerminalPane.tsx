@@ -44,6 +44,7 @@ export default function TerminalPane({ sessionId, cwd }: Props) {
     term.open(container)
 
     let disposed = false
+    let spawned = false
 
     const fitSafely = (): void => {
       try {
@@ -52,22 +53,6 @@ export default function TerminalPane({ sessionId, cwd }: Props) {
         // container may not be sized yet on first paint
       }
     }
-
-    fitSafely()
-
-    void window.api.pty
-      .spawn({
-        sessionId: ptyId,
-        cwd: cwd ?? '',
-        cols: term.cols,
-        rows: term.rows
-      })
-      .then((res) => {
-        if (disposed) return
-        if (!res.ok) {
-          term.writeln(`\r\n\x1b[31m[hydra-ensemble] failed to spawn pty: ${res.error}\x1b[0m`)
-        }
-      })
 
     const offData = window.api.pty.onData((evt) => {
       if (evt.sessionId === ptyId) term.write(evt.data)
@@ -84,14 +69,47 @@ export default function TerminalPane({ sessionId, cwd }: Props) {
       void window.api.pty.write(ptyId, data)
     })
 
+    const spawnIfReady = async (): Promise<void> => {
+      if (spawned || disposed) return
+      const cols = term.cols >= 10 ? term.cols : 80
+      const rows = term.rows >= 5 ? term.rows : 24
+      spawned = true
+      const res = await window.api.pty.spawn({
+        sessionId: ptyId,
+        cwd: cwd ?? '',
+        cols,
+        rows
+      })
+      if (disposed) {
+        void window.api.pty.kill(ptyId)
+        return
+      }
+      if (!res.ok) {
+        spawned = false
+        term.writeln(`\r\n\x1b[31m[hydra-ensemble] failed to spawn pty: ${res.error}\x1b[0m`)
+      }
+    }
+
     const ro = new ResizeObserver(() => {
       fitSafely()
-      void window.api.pty.resize(ptyId, term.cols, term.rows)
+      if (!spawned) {
+        void spawnIfReady()
+      } else {
+        void window.api.pty.resize(ptyId, term.cols, term.rows)
+      }
     })
     ro.observe(container)
 
+    // Fallback: if ResizeObserver doesn't fire quickly (it should, on observe),
+    // try spawning after a tick using whatever size we have.
+    const fallback = setTimeout(() => {
+      fitSafely()
+      void spawnIfReady()
+    }, 50)
+
     return () => {
       disposed = true
+      clearTimeout(fallback)
       ro.disconnect()
       offData()
       offExit()
