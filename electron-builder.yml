@@ -1,5 +1,5 @@
-appId: com.intuitivecompute.conductor
-productName: Conductor
+appId: com.intuitivecompute.hydra
+productName: Hydra Ensemble
 copyright: Copyright (C) 2026 Intuitive Compute
 directories:
   output: release
@@ -23,10 +23,11 @@ linux:
   maintainer: Intuitive Compute <support@intuitivecompute.com>
   synopsis: Orchestrate parallel Claude Code agents
   description: |
-    Conductor is a multi-agent orchestrator for Claude Code: each
-    session is its own agent with avatar, branch and live status,
+    Hydra Ensemble is a multi-agent orchestrator for Claude Code:
+    each session is its own agent (avatar, branch, live status),
     backed by git worktree isolation and a built-in toolkit. Watch
-    several Claudes work in parallel without ever switching tabs.
+    a many-headed pack of Claudes work in parallel without ever
+    switching tabs.
 win:
   target:
     - target: nsis
@@ -42,8 +43,8 @@ nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
-  shortcutName: Conductor
+  shortcutName: Hydra Ensemble
 publish:
   provider: github
   owner: javabetatester
-  repo: Conductor
+  repo: HydraEnsemble

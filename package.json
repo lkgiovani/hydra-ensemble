@@ -1,7 +1,7 @@
 {
-  "name": "conductor",
+  "name": "hydra-ensemble",
   "version": "0.1.0-phase0",
-  "description": "Conductor — orchestrate parallel Claude Code agents (multi-OS)",
+  "description": "Hydra Ensemble — orchestrate parallel Claude Code agents (multi-OS)",
   "main": "out/main/index.js",
   "author": "Intuitive Compute",
   "license": "MIT",
