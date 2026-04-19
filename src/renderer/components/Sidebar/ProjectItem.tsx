@@ -1,4 +1,13 @@
 import { useState } from 'react'
+import {
+  ChevronDown,
+  ChevronRight,
+  Folder,
+  FolderOpen,
+  ArrowRightLeft,
+  Copy,
+  Trash2
+} from 'lucide-react'
 import type { ProjectMeta } from '../../../shared/types'
 import ContextMenu, { type ContextMenuItem } from '../ContextMenu'
 
@@ -24,19 +33,35 @@ export default function ProjectItem({
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
 
   const items: ContextMenuItem[] = [
-    { label: 'Switch to project', onSelect },
-    { label: 'Copy path', onSelect: onCopyPath },
-    { label: 'Remove from list', onSelect: onRemove, danger: true }
+    {
+      label: 'Switch to project',
+      onSelect,
+      icon: <ArrowRightLeft size={14} strokeWidth={1.75} />
+    },
+    {
+      label: 'Copy path',
+      onSelect: onCopyPath,
+      icon: <Copy size={14} strokeWidth={1.75} />
+    },
+    {
+      label: 'Remove from list',
+      onSelect: onRemove,
+      danger: true,
+      icon: <Trash2 size={14} strokeWidth={1.75} />
+    }
   ]
+
+  const Chevron = expanded ? ChevronDown : ChevronRight
+  const FolderIcon = expanded || active ? FolderOpen : Folder
+
+  const rowTone = active
+    ? 'bg-bg-4 text-text-1'
+    : 'text-text-2 hover:bg-bg-3 hover:text-text-1'
 
   return (
     <>
       <div
-        className={`group flex items-center gap-1 rounded px-2 py-1 text-xs transition ${
-          active
-            ? 'bg-white/10 text-white'
-            : 'text-white/70 hover:bg-white/5 hover:text-white/90'
-        }`}
+        className={`group flex items-center gap-1.5 rounded-sm px-2 py-1.5 text-sm transition-colors ${rowTone}`}
         onContextMenu={(e) => {
           e.preventDefault()
           setMenu({ x: e.clientX, y: e.clientY })
@@ -45,11 +70,17 @@ export default function ProjectItem({
         <button
           type="button"
           onClick={onToggleExpand}
-          className="text-white/40 hover:text-white/80"
+          className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-text-4 hover:bg-bg-4 hover:text-text-2"
           aria-label={expanded ? 'collapse project' : 'expand project'}
         >
-          {expanded ? '▾' : '▸'}
+          <Chevron size={14} strokeWidth={1.75} />
         </button>
+        <FolderIcon
+          size={14}
+          strokeWidth={1.75}
+          className={active ? 'text-accent-400' : 'text-text-3'}
+          aria-hidden
+        />
         <button
           type="button"
           onClick={onSelect}
@@ -58,7 +89,13 @@ export default function ProjectItem({
         >
           <span className={active ? 'font-medium' : ''}>{project.name}</span>
         </button>
-        {active && <span className="text-[10px] text-emerald-400">active</span>}
+        {active && (
+          <span
+            className="ml-1 h-1.5 w-1.5 shrink-0 rounded-full bg-accent-400"
+            aria-label="active"
+            title="active"
+          />
+        )}
       </div>
       {menu && <ContextMenu x={menu.x} y={menu.y} items={items} onDismiss={() => setMenu(null)} />}
     </>

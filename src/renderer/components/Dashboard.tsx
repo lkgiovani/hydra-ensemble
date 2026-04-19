@@ -1,5 +1,13 @@
 import { useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
+import {
+  Activity,
+  DollarSign,
+  LayoutDashboard,
+  RotateCw,
+  Trash2,
+  X
+} from 'lucide-react'
 import { useSessions } from '../state/sessions'
 import type { SessionMeta } from '../../shared/types'
 import SessionStatePill from './SessionStatePill'
@@ -17,7 +25,7 @@ interface CardProps {
 }
 
 function formatCost(value: number): string {
-  return `$${value.toFixed(2)}`
+  return value.toFixed(2)
 }
 
 function previewText(session: SessionMeta): string {
@@ -31,54 +39,63 @@ function DashboardCard({ session, onFocus, onRestart, onDestroy }: CardProps) {
   const model = session.model ?? 'sonnet'
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-white/10 bg-[#1c1c22] p-4">
+    <div className="df-lift flex flex-col gap-3 rounded-md border border-border-soft bg-bg-3 p-4 hover:border-border-mid hover:bg-bg-4">
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-semibold text-white">
-            {session.name}
-          </div>
-          <div className="mt-1 flex items-center gap-2">
-            <SessionStatePill state={session.state} />
-          </div>
+        <SessionStatePill state={session.state} />
+        <div className="flex items-center gap-1 font-mono text-[11px] tabular-nums text-text-3">
+          <DollarSign size={11} strokeWidth={1.75} className="text-text-4" />
+          <span className="text-text-2">{formatCost(cost)}</span>
         </div>
-        <div className="text-right font-mono text-[11px] tabular-nums text-white/70">
-          <div>{formatCost(cost)}</div>
-          <div className="text-white/40">{model}</div>
+      </div>
+
+      <div className="min-w-0">
+        <div className="truncate text-sm font-semibold text-text-1">
+          {session.name}
+        </div>
+        <div className="mt-0.5 truncate font-mono text-[11px] text-text-4">
+          {model}
         </div>
       </div>
 
       <div
-        className="overflow-hidden text-[12px] leading-snug text-white/60"
+        className="font-mono text-xs leading-snug text-text-3"
         style={{
           display: '-webkit-box',
           WebkitLineClamp: 4,
-          WebkitBoxOrient: 'vertical'
+          WebkitBoxOrient: 'vertical',
+          overflow: 'hidden'
         }}
       >
         {previewText(session)}
       </div>
 
-      <div className="mt-auto flex items-center justify-end gap-2 pt-1">
+      <div className="mt-auto flex items-center justify-end gap-1 border-t border-border-soft pt-3">
         <button
           type="button"
           onClick={() => onFocus(session.id)}
-          className="rounded bg-sky-500/15 px-2.5 py-1 text-[11px] font-medium text-sky-300 hover:bg-sky-500/25"
+          className="flex items-center gap-1.5 rounded-md p-1.5 text-text-3 hover:bg-bg-3 hover:text-text-1"
+          title="Focus session"
+          aria-label="focus"
         >
-          focus
+          <Activity size={14} strokeWidth={1.75} />
         </button>
         <button
           type="button"
           onClick={() => onRestart(session.id)}
-          className="rounded bg-white/5 px-2.5 py-1 text-[11px] font-medium text-white/70 hover:bg-white/10"
+          className="rounded-md p-1.5 text-text-3 hover:bg-bg-3 hover:text-text-1"
+          title="Restart session"
+          aria-label="restart"
         >
-          restart
+          <RotateCw size={14} strokeWidth={1.75} />
         </button>
         <button
           type="button"
           onClick={() => onDestroy(session.id)}
-          className="rounded bg-red-500/15 px-2.5 py-1 text-[11px] font-medium text-red-300 hover:bg-red-500/25"
+          className="rounded-md p-1.5 text-text-3 hover:bg-bg-3 hover:text-status-attention"
+          title="Destroy session"
+          aria-label="destroy"
         >
-          destroy
+          <Trash2 size={14} strokeWidth={1.75} />
         </button>
       </div>
     </div>
@@ -116,19 +133,17 @@ export default function Dashboard({ open, onClose }: Props) {
   const body = useMemo(() => {
     if (sessions.length === 0) {
       return (
-        <div className="flex flex-1 items-center justify-center text-sm text-white/40">
-          no sessions to display
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 py-16">
+          <LayoutDashboard size={32} strokeWidth={1.25} className="text-text-4" />
+          <div className="text-sm text-text-2">No active sessions</div>
+          <div className="text-xs text-text-4">
+            Open a project and create a session to get started.
+          </div>
         </div>
       )
     }
     return (
-      <div
-        className="grid flex-1 gap-4 overflow-y-auto pr-1"
-        style={{
-          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-          gridAutoRows: 'min-content'
-        }}
-      >
+      <div className="df-scroll grid flex-1 gap-4 overflow-y-auto pr-1 [grid-template-columns:repeat(auto-fill,minmax(320px,1fr))] [grid-auto-rows:min-content]">
         {sessions.map((s) => (
           <DashboardCard
             key={s.id}
@@ -147,29 +162,32 @@ export default function Dashboard({ open, onClose }: Props) {
 
   const overlay = (
     <div
-      className="fixed inset-0 z-50 flex flex-col bg-[#0a0a0c]/95 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-bg-0/85 p-8 backdrop-blur-md"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose()
       }}
     >
-      <div className="flex items-baseline justify-between px-10 pb-4 pt-10">
-        <div>
-          <div className="font-mono text-sm font-bold tracking-wider text-white">
-            DASHBOARD
+      <div className="df-fade-in flex max-h-[90vh] w-full max-w-[1280px] flex-col overflow-hidden rounded-lg border border-border-mid bg-bg-2 shadow-pop">
+        <header className="flex items-center justify-between border-b border-border-soft px-5 py-3">
+          <div className="flex items-center gap-2.5">
+            <LayoutDashboard size={16} strokeWidth={1.75} className="text-text-2" />
+            <div className="text-sm font-semibold text-text-1">Dashboard</div>
+            <div className="text-xs text-text-4">
+              {sessions.length} {sessions.length === 1 ? 'session' : 'sessions'}
+            </div>
           </div>
-          <div className="mt-1 font-mono text-[11px] text-white/50">
-            All sessions at a glance. Press Esc or Cmd/Ctrl+D to close.
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded px-2 py-1 text-xs text-white/50 hover:bg-white/10 hover:text-white"
-        >
-          close
-        </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md p-1.5 text-text-3 hover:bg-bg-3 hover:text-text-1"
+            aria-label="Close dashboard"
+            title="Esc"
+          >
+            <X size={16} strokeWidth={1.75} />
+          </button>
+        </header>
+        <div className="flex flex-1 flex-col overflow-hidden p-5">{body}</div>
       </div>
-      <div className="flex flex-1 flex-col px-10 pb-10">{body}</div>
     </div>
   )
 

@@ -93,5 +93,10 @@ export default function CodeMirrorView({ path, initial, onChange, onSave }: Prop
     }
   }, [path, initial])
 
-  return <div ref={hostRef} className="h-full w-full overflow-hidden" />
+  return (
+    <div
+      ref={hostRef}
+      className="df-scroll h-full w-full overflow-hidden rounded-md border border-border-soft bg-bg-1 font-mono text-sm"
+    />
+  )
 }

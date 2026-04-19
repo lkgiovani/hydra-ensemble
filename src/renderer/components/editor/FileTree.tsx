@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { AlertCircle, ChevronRight, File as FileIcon, Folder, Loader2 } from 'lucide-react'
 import type { DirEntry } from '../../../shared/types'
 
 interface Props {
@@ -12,8 +13,9 @@ interface NodeProps {
   onOpenFile: (path: string) => void
 }
 
-function indent(depth: number): React.CSSProperties {
-  return { paddingLeft: `${8 + depth * 12}px` }
+function rowPad(depth: number): string {
+  // Tailwind doesn't handle truly dynamic class names; use inline padding for indents.
+  return `${10 + depth * 12}px`
 }
 
 function DirNode({ entry, depth, onOpenFile }: NodeProps) {
@@ -46,18 +48,29 @@ function DirNode({ entry, depth, onOpenFile }: NodeProps) {
       <button
         type="button"
         onClick={() => void toggle()}
-        className="flex w-full items-center gap-1 truncate py-0.5 text-left text-xs text-white/80 hover:bg-white/5"
-        style={indent(depth)}
+        className="flex w-full items-center gap-1.5 truncate py-1 pr-2 text-left text-xs text-text-2 hover:bg-bg-3 hover:text-text-1"
+        style={{ paddingLeft: rowPad(depth) }}
         title={entry.path}
       >
-        <span className="text-white/40">{expanded ? 'v' : '>'}</span>
+        <ChevronRight
+          size={12}
+          strokeWidth={2}
+          className={`shrink-0 text-text-4 transition-transform ${
+            expanded ? 'rotate-90' : ''
+          }`}
+        />
+        <Folder size={14} strokeWidth={1.75} className="shrink-0 text-accent-400" />
         <span className="truncate">{entry.name}</span>
       </button>
       {expanded && (
         <div>
           {loading && (
-            <div className="text-[11px] text-white/30" style={indent(depth + 1)}>
-              loading...
+            <div
+              className="flex items-center gap-1.5 py-1 text-[11px] text-text-4"
+              style={{ paddingLeft: rowPad(depth + 1) }}
+            >
+              <Loader2 size={11} className="animate-spin" />
+              Loading…
             </div>
           )}
           {children?.map((c) =>
@@ -74,15 +87,18 @@ function DirNode({ entry, depth, onOpenFile }: NodeProps) {
 }
 
 function FileNode({ entry, depth, onOpenFile }: NodeProps) {
+  // Files are indented one chevron-width past their depth so they line up with
+  // sibling folders' icons (which sit after the chevron).
+  const padPx = 10 + depth * 12 + 14
   return (
     <button
       type="button"
       onClick={() => onOpenFile(entry.path)}
-      className="flex w-full items-center gap-1 truncate py-0.5 text-left text-xs text-white/70 hover:bg-white/5"
-      style={indent(depth)}
+      className="flex w-full items-center gap-1.5 truncate py-1 pr-2 text-left text-xs text-text-3 hover:bg-bg-3 hover:text-text-1"
+      style={{ paddingLeft: `${padPx}px` }}
       title={entry.path}
     >
-      <span className="text-white/30">-</span>
+      <FileIcon size={14} strokeWidth={1.5} className="shrink-0 text-text-4" />
       <span className="truncate">{entry.name}</span>
     </button>
   )
@@ -110,13 +126,22 @@ export default function FileTree({ root, onOpenFile }: Props) {
   }, [root])
 
   if (error) {
-    return <div className="p-2 text-xs text-red-300">tree error: {error}</div>
+    return (
+      <div className="m-3 flex items-start gap-2 rounded-md border border-status-attention/30 bg-status-attention/10 px-3 py-2 text-sm text-status-attention">
+        <AlertCircle size={14} strokeWidth={1.75} className="mt-0.5 shrink-0" />
+        <div className="break-words">{error}</div>
+      </div>
+    )
   }
   if (!entries) {
-    return <div className="p-2 text-xs text-white/40">loading...</div>
+    return (
+      <div className="flex items-center gap-1.5 px-3 py-2 text-xs text-text-3">
+        <Loader2 size={12} className="animate-spin" /> Loading…
+      </div>
+    )
   }
   return (
-    <div className="py-1">
+    <div className="py-1.5">
       {entries.map((e) =>
         e.isDir ? (
           <DirNode key={e.path} entry={e} depth={0} onOpenFile={onOpenFile} />

@@ -1,10 +1,12 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 
 export interface ContextMenuItem {
   label: string
   onSelect: () => void
   danger?: boolean
   disabled?: boolean
+  icon?: ReactNode
+  shortcut?: string
 }
 
 interface ContextMenuProps {
@@ -13,6 +15,9 @@ interface ContextMenuProps {
   items: ContextMenuItem[]
   onDismiss: () => void
 }
+
+const ROW_H = 30
+const MENU_W = 200
 
 export default function ContextMenu({ x, y, items, onDismiss }: ContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null)
@@ -40,38 +45,56 @@ export default function ContextMenu({ x, y, items, onDismiss }: ContextMenuProps
   }, [onDismiss])
 
   // Clamp to viewport so the menu does not overflow.
-  const left = Math.min(x, window.innerWidth - 200)
-  const top = Math.min(y, window.innerHeight - items.length * 28 - 8)
+  const left = Math.min(x, window.innerWidth - MENU_W - 8)
+  const top = Math.min(y, window.innerHeight - items.length * ROW_H - 12)
 
   return (
     <div
       ref={ref}
       role="menu"
       style={{ left, top }}
-      className="fixed z-50 min-w-[180px] rounded border border-white/10 bg-[#1c1c20] py-1 text-xs text-white/85 shadow-lg"
+      className="fixed z-50 min-w-44 rounded-md border border-border-mid bg-bg-3 p-1 text-xs text-text-2 shadow-pop df-fade-in"
     >
-      {items.map((item) => (
-        <button
-          key={item.label}
-          type="button"
-          role="menuitem"
-          disabled={item.disabled}
-          onClick={() => {
-            if (item.disabled) return
-            item.onSelect()
-            onDismiss()
-          }}
-          className={`block w-full px-3 py-1.5 text-left transition ${
-            item.disabled
-              ? 'cursor-not-allowed text-white/30'
-              : item.danger
-                ? 'text-red-300 hover:bg-red-500/15'
-                : 'hover:bg-white/10'
-          }`}
-        >
-          {item.label}
-        </button>
-      ))}
+      {items.map((item) => {
+        const base =
+          'group flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left transition-colors'
+        const tone = item.disabled
+          ? 'cursor-not-allowed text-text-4'
+          : item.danger
+            ? 'text-status-attention hover:bg-status-attention/10'
+            : 'text-text-2 hover:bg-bg-4 hover:text-text-1'
+        return (
+          <button
+            key={item.label}
+            type="button"
+            role="menuitem"
+            disabled={item.disabled}
+            onClick={() => {
+              if (item.disabled) return
+              item.onSelect()
+              onDismiss()
+            }}
+            className={`${base} ${tone}`}
+          >
+            {item.icon !== undefined && (
+              <span
+                className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center ${
+                  item.disabled ? 'text-text-4' : 'text-text-3'
+                }`}
+                aria-hidden
+              >
+                {item.icon}
+              </span>
+            )}
+            <span className="flex-1 truncate">{item.label}</span>
+            {item.shortcut && (
+              <kbd className="ml-2 rounded bg-bg-4 px-1.5 py-0.5 font-mono text-[10px] text-text-3">
+                {item.shortcut}
+              </kbd>
+            )}
+          </button>
+        )
+      })}
     </div>
   )
 }

@@ -25,6 +25,7 @@ import { registerEditorIpc } from './ipc/editor'
 import { registerGhIpc } from './ipc/gh'
 import { registerQuickTermIpc } from './ipc/quickTerm'
 import { initStore } from './store'
+import { initUpdater } from './updater'
 import type { JsonlUpdate, SessionState } from '../shared/types'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -137,7 +138,8 @@ app.whenReady().then(() => {
   registerEditorIpc(editorFs)
   registerGhIpc(ghService)
   registerQuickTermIpc(quickTermService)
-  createWindow()
+  const win = createWindow()
+  initUpdater(win)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

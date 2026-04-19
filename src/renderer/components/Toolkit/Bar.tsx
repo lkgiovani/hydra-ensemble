@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Loader2, MoreHorizontal, Wrench, X } from 'lucide-react'
 import { useToolkit } from '../../state/toolkit'
 import { useSessions } from '../../state/sessions'
 import EditorDialog from './EditorDialog'
@@ -34,21 +35,23 @@ export default function ToolkitBar() {
 
   if (items.length === 0 && !editorOpen) {
     return (
-      <div className="flex items-center gap-2 border-b border-white/10 bg-[#16161a] px-3 py-1 text-xs text-white/40">
-        <span>no toolkit items</span>
+      <div className="flex items-center gap-2 text-xs text-text-4">
+        <Wrench size={12} strokeWidth={1.75} />
+        <span>No toolkit items</span>
         <button
           type="button"
           onClick={openEditor}
-          className="rounded px-2 py-0.5 text-white/70 hover:bg-white/10 hover:text-white"
+          className="rounded-md px-2 py-1 text-text-3 hover:bg-bg-3 hover:text-text-1"
         >
-          configure…
+          Configure
         </button>
+        <EditorDialog />
       </div>
     )
   }
 
   return (
-    <div className="flex items-center gap-1 border-b border-white/10 bg-[#16161a] px-2 py-1">
+    <div className="flex items-center gap-1">
       {items.map((item) => (
         <ToolkitButton
           key={item.id}
@@ -59,15 +62,14 @@ export default function ToolkitBar() {
           onTogglePopover={(open) => setOpenPopover(open ? item.id : null)}
         />
       ))}
-      <div className="ml-auto" />
       <button
         type="button"
         onClick={openEditor}
-        className="rounded px-2 py-1 text-xs text-white/50 hover:bg-white/10 hover:text-white"
-        title="edit toolkit"
-        aria-label="edit toolkit"
+        className="rounded-md p-1.5 text-text-3 hover:bg-bg-3 hover:text-text-1"
+        title="Edit toolkit"
+        aria-label="Edit toolkit"
       >
-        …
+        <MoreHorizontal size={14} strokeWidth={1.75} />
       </button>
       <EditorDialog />
     </div>
@@ -103,12 +105,12 @@ function ToolkitButton({ item, run, openOpen, onClick, onTogglePopover }: Button
     return () => window.removeEventListener('mousedown', onDoc)
   }, [openOpen, onTogglePopover])
 
-  const border =
+  const dot =
     run?.status === 'success'
-      ? 'border-emerald-400/60'
+      ? 'bg-status-generating'
       : run?.status === 'error'
-        ? 'border-red-400/60'
-        : 'border-white/10'
+        ? 'bg-status-attention'
+        : null
 
   return (
     <div ref={anchorRef} className="relative">
@@ -116,14 +118,17 @@ function ToolkitButton({ item, run, openOpen, onClick, onTogglePopover }: Button
         type="button"
         onClick={onClick}
         title={item.command}
-        className={`rounded border px-2 py-1 text-xs transition ${border} ${
-          run?.status === 'running'
-            ? 'bg-white/10 text-white/70'
-            : 'bg-white/5 text-white/80 hover:bg-white/10 hover:text-white'
+        className={`flex items-center gap-1.5 rounded-md border border-border-soft bg-bg-3 px-2.5 py-1 text-xs transition hover:border-border-mid hover:bg-bg-4 ${
+          run?.status === 'running' ? 'text-text-3' : 'text-text-2 hover:text-text-1'
         }`}
       >
-        {run?.status === 'running' ? '… ' : ''}
-        {item.label}
+        {run?.status === 'running' ? (
+          <Loader2 size={12} className="animate-spin text-text-3" />
+        ) : (
+          <Wrench size={12} strokeWidth={1.75} className="text-text-4" />
+        )}
+        <span className="font-medium">{item.label}</span>
+        {dot && <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${dot}`} />}
       </button>
       {openOpen && run && (
         <ResultPopover
@@ -145,42 +150,56 @@ interface PopoverProps {
 }
 
 function ResultPopover({ run, expanded, onToggle, onClose }: PopoverProps) {
-  const ringColor =
+  const accent =
     run.status === 'success'
-      ? 'border-emerald-400/60'
+      ? 'border-status-generating/40'
       : run.status === 'error'
-        ? 'border-red-400/60'
-        : 'border-white/20'
+        ? 'border-status-attention/40'
+        : 'border-border-mid'
 
   return (
     <div
-      className={`absolute left-0 top-full z-30 mt-1 w-[28rem] rounded border bg-[#101014] p-2 text-xs text-white shadow-lg ${ringColor}`}
+      className={`df-fade-in absolute left-0 top-full z-30 mt-1.5 w-[28rem] rounded-md border bg-bg-2 text-xs text-text-1 shadow-card ${accent}`}
     >
-      <div className="mb-1 flex items-center justify-between">
-        <div className="text-white/60">
-          {run.status === 'running'
-            ? 'running…'
-            : `exit ${run.result?.exitCode ?? '?'} · ${run.result?.durationMs ?? 0} ms`}
+      <div className="flex items-center justify-between border-b border-border-soft px-3 py-2">
+        <div className="flex items-center gap-2 text-text-3">
+          {run.status === 'running' ? (
+            <>
+              <Loader2 size={12} className="animate-spin" /> Running…
+            </>
+          ) : (
+            <>
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${
+                  run.status === 'success' ? 'bg-status-generating' : 'bg-status-attention'
+                }`}
+              />
+              <span className="font-mono">
+                exit {run.result?.exitCode ?? '?'} · {run.result?.durationMs ?? 0}ms
+              </span>
+            </>
+          )}
         </div>
         <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={onToggle}
-            className="rounded px-1 text-white/60 hover:bg-white/10 hover:text-white"
+            className="rounded-md px-2 py-0.5 text-[11px] text-text-3 hover:bg-bg-3 hover:text-text-1"
           >
-            {expanded ? 'collapse' : 'expand'}
+            {expanded ? 'Collapse' : 'Expand'}
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="rounded px-1 text-white/60 hover:bg-white/10 hover:text-white"
+            className="rounded-md p-1 text-text-3 hover:bg-bg-3 hover:text-text-1"
+            aria-label="Close output"
           >
-            ×
+            <X size={12} strokeWidth={1.75} />
           </button>
         </div>
       </div>
       {expanded && (
-        <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded bg-black/40 p-2 font-mono text-[11px] text-white/80">
+        <pre className="df-scroll max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-b-md bg-bg-1 p-3 font-mono text-[11px] text-text-2">
           {(run.result?.stdout ?? '') + (run.result?.stderr ? `\n${run.result.stderr}` : '')}
         </pre>
       )}

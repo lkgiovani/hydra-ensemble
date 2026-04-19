@@ -1,6 +1,8 @@
 import { useMemo } from 'react'
+import { GitBranch, DollarSign, Hash, Activity } from 'lucide-react'
 import { useSessions } from '../state/sessions'
 import type { SessionMeta } from '../../shared/types'
+import SessionStatePill from './SessionStatePill'
 
 function formatTokens(count: number): string {
   if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`
@@ -9,7 +11,7 @@ function formatTokens(count: number): string {
 }
 
 function formatCost(value: number): string {
-  return `$${value.toFixed(2)}`
+  return value.toFixed(2)
 }
 
 function activeBranch(active: SessionMeta | undefined): string {
@@ -47,42 +49,57 @@ export default function StatusBar() {
   const branch = activeBranch(active)
   const model = active?.model ?? 'sonnet'
   const sessionCount = sessions.length
+  const hasCost = totals.cost > 0
 
   return (
     <div
-      className="flex h-7 shrink-0 items-center gap-4 border-t border-white/10 bg-[#16161a] px-3 font-mono text-[11px] text-white/50"
+      className="flex h-7 shrink-0 items-center gap-4 border-t border-border-soft bg-bg-2 px-3 text-[11px] text-text-3"
       role="status"
     >
-      <span className="flex items-center gap-1.5" title="current branch">
-        <span aria-hidden>⎇</span>
-        <span className="text-white/70">{branch}</span>
+      {/* LEFT: active session context */}
+      <span
+        className="flex items-center gap-1.5 font-mono text-text-2"
+        title="current branch"
+      >
+        <GitBranch size={12} strokeWidth={1.75} className="text-text-4" />
+        <span className="truncate">{branch}</span>
       </span>
 
-      <span title="active sessions">
-        <span className="tabular-nums text-white/70">{sessionCount}</span>{' '}
-        <span className="text-white/40">
-          {sessionCount === 1 ? 'session' : 'sessions'}
-        </span>
+      <span className="flex items-center gap-1.5" title="model">
+        <Activity size={12} strokeWidth={1.75} className="text-text-4" />
+        <span className="font-mono text-text-2">{model}</span>
       </span>
 
+      <SessionStatePill state={active?.state} />
+
+      {/* RIGHT: totals */}
       <span className="ml-auto flex items-center gap-4">
-        <span title="model">
-          <span className="text-white/40">model </span>
-          <span className="text-white/70">{model}</span>
-        </span>
-
-        <span title="aggregate input/output tokens" className="tabular-nums">
-          <span className="text-white/70">{formatTokens(totals.tokensIn)}</span>
-          <span className="text-white/40">↓ </span>
-          <span className="text-white/70">{formatTokens(totals.tokensOut)}</span>
-          <span className="text-white/40">↑</span>
+        <span
+          title="aggregate input/output tokens"
+          className="flex items-center gap-1.5 font-mono tabular-nums"
+        >
+          <Hash size={12} strokeWidth={1.75} className="text-text-4" />
+          <span className="text-text-2">{formatTokens(totals.tokensIn)}</span>
+          <span className="text-text-4">in</span>
+          <span className="text-text-2">{formatTokens(totals.tokensOut)}</span>
+          <span className="text-text-4">out</span>
         </span>
 
         <span
           title="aggregate cost across all sessions"
-          className="tabular-nums text-white/80"
+          className={`flex items-center gap-1 font-mono tabular-nums ${
+            hasCost ? 'text-status-generating' : 'text-text-3'
+          }`}
         >
-          {formatCost(totals.cost)}
+          <DollarSign size={12} strokeWidth={1.75} />
+          <span>{formatCost(totals.cost)}</span>
+        </span>
+
+        <span title="active sessions" className="flex items-center gap-1.5">
+          <span className="font-mono tabular-nums text-text-2">{sessionCount}</span>
+          <span className="text-text-4">
+            {sessionCount === 1 ? 'session' : 'sessions'}
+          </span>
         </span>
       </span>
     </div>

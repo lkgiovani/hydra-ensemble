@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { AlertCircle, Check, X, Zap } from 'lucide-react'
 import { useWatchdog } from '../../state/watchdog'
 import type { WatchdogRule } from '../../../shared/types'
 
@@ -72,11 +73,11 @@ export default function RuleDialog() {
   }
 
   const onSave = async (): Promise<void> => {
-    if (!form.name.trim()) return setError('name is required')
-    if (!form.triggerPattern) return setError('regex is required')
+    if (!form.name.trim()) return setError('Name is required')
+    if (!form.triggerPattern) return setError('Regex is required')
     const re = validateRegex(form.triggerPattern)
-    if (re) return setError(`invalid regex: ${re}`)
-    if (form.cooldownMs < 0) return setError('cooldown must be >= 0')
+    if (re) return setError(`Invalid regex: ${re}`)
+    if (form.cooldownMs < 0) return setError('Cooldown must be >= 0')
 
     const rule: WatchdogRule = {
       id: form.id,
@@ -92,103 +93,161 @@ export default function RuleDialog() {
   }
 
   const regexErr = form.triggerPattern ? validateRegex(form.triggerPattern) : null
+  const regexOk = !!form.triggerPattern && !regexErr
+
+  const inputCls =
+    'w-full rounded-md border border-border-mid bg-bg-3 px-2.5 py-1.5 text-sm text-text-1 placeholder:text-text-4 focus-within:border-accent-500'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="flex w-[34rem] max-w-[90vw] flex-col gap-3 rounded-lg border border-white/10 bg-[#16161a] p-4 text-sm text-white shadow-xl">
-        <div className="flex items-center justify-between">
-          <h2 className="font-medium">
-            {editingId === 'new' ? 'New watchdog rule' : 'Edit watchdog rule'}
-          </h2>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-bg-0/85 p-6 backdrop-blur-md"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) cancel()
+      }}
+    >
+      <div className="df-fade-in flex max-h-[90vh] w-[36rem] max-w-[90vw] flex-col overflow-hidden rounded-lg border border-border-mid bg-bg-2 shadow-pop">
+        <header className="flex items-center justify-between border-b border-border-soft px-5 py-3">
+          <div className="flex items-center gap-2.5">
+            <Zap size={16} strokeWidth={1.75} className="text-text-2" />
+            <h2 className="text-sm font-semibold text-text-1">
+              {editingId === 'new' ? 'New watchdog rule' : 'Edit watchdog rule'}
+            </h2>
+          </div>
           <button
             type="button"
             onClick={cancel}
-            className="rounded px-2 py-1 text-white/60 hover:bg-white/10 hover:text-white"
+            className="rounded-md p-1.5 text-text-3 hover:bg-bg-3 hover:text-text-1"
+            aria-label="Close"
           >
-            ×
+            <X size={16} strokeWidth={1.75} />
           </button>
-        </div>
-        <Field label="Name">
-          <input
-            type="text"
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            placeholder="auto-accept y prompt"
-            className="w-full rounded border border-white/10 bg-black/40 px-2 py-1 text-xs"
-          />
-        </Field>
-        <Field label="Regex">
-          <input
-            type="text"
-            value={form.triggerPattern}
-            onChange={(e) => setForm({ ...form, triggerPattern: e.target.value })}
-            placeholder="Continue\?"
-            spellCheck={false}
-            className={`w-full rounded border bg-black/40 px-2 py-1 font-mono text-xs ${
-              regexErr ? 'border-red-400/60' : 'border-white/10'
-            }`}
-          />
-          {regexErr && <span className="text-[11px] text-red-400">{regexErr}</span>}
-        </Field>
-        <Field label="Action">
-          <select
-            value={form.action}
-            onChange={(e) => setForm({ ...form, action: e.target.value as Action })}
-            className="rounded border border-white/10 bg-black/40 px-2 py-1 text-xs"
-          >
-            <option value="notify">notify</option>
-            <option value="sendInput">sendInput</option>
-            <option value="kill">kill</option>
-          </select>
-        </Field>
-        {form.action === 'sendInput' && (
-          <Field label="Payload">
+        </header>
+
+        <div className="df-scroll flex flex-1 flex-col gap-4 overflow-y-auto p-5">
+          <Field label="Name">
             <input
               type="text"
-              value={form.payload}
-              onChange={(e) => setForm({ ...form, payload: e.target.value })}
-              placeholder={'y\\r'}
-              className="w-full rounded border border-white/10 bg-black/40 px-2 py-1 font-mono text-xs"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder="auto-accept y prompt"
+              className={inputCls}
             />
-            <span className="text-[11px] text-white/40">
-              sent verbatim (use \r for enter)
-            </span>
           </Field>
-        )}
-        <Field label="Cooldown (ms)">
-          <input
-            type="number"
-            min={0}
-            value={form.cooldownMs}
-            onChange={(e) => setForm({ ...form, cooldownMs: Number(e.target.value) || 0 })}
-            className="w-32 rounded border border-white/10 bg-black/40 px-2 py-1 text-xs"
-          />
-        </Field>
-        <label className="flex items-center gap-2 text-xs text-white/70">
-          <input
-            type="checkbox"
-            checked={form.enabled}
-            onChange={(e) => setForm({ ...form, enabled: e.target.checked })}
-          />
-          enabled
-        </label>
-        {error && <div className="text-xs text-red-400">{error}</div>}
-        <div className="flex items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={cancel}
-            className="rounded px-3 py-1 text-xs text-white/60 hover:bg-white/10 hover:text-white"
-          >
-            cancel
-          </button>
-          <button
-            type="button"
-            onClick={() => void onSave()}
-            className="rounded bg-emerald-500/30 px-3 py-1 text-xs text-emerald-100 hover:bg-emerald-500/50"
-          >
-            save
-          </button>
+
+          <Field label="Regex">
+            <div
+              className={`flex items-center gap-2 rounded-md border bg-bg-3 px-2.5 py-1.5 ${
+                regexErr
+                  ? 'border-status-attention/50'
+                  : regexOk
+                    ? 'border-status-generating/40'
+                    : 'border-border-mid'
+              } focus-within:border-accent-500`}
+            >
+              <input
+                type="text"
+                value={form.triggerPattern}
+                onChange={(e) => setForm({ ...form, triggerPattern: e.target.value })}
+                placeholder="Continue\?"
+                spellCheck={false}
+                className="flex-1 bg-transparent font-mono text-sm text-text-1 placeholder:text-text-4 focus:outline-none"
+              />
+              {regexOk && (
+                <Check
+                  size={14}
+                  strokeWidth={2}
+                  className="shrink-0 text-status-generating"
+                />
+              )}
+              {regexErr && (
+                <AlertCircle
+                  size={14}
+                  strokeWidth={1.75}
+                  className="shrink-0 text-status-attention"
+                />
+              )}
+            </div>
+            {regexErr && (
+              <span className="text-[11px] text-status-attention">{regexErr}</span>
+            )}
+          </Field>
+
+          <Field label="Action">
+            <select
+              value={form.action}
+              onChange={(e) => setForm({ ...form, action: e.target.value as Action })}
+              className={inputCls}
+            >
+              <option value="notify">notify</option>
+              <option value="sendInput">sendInput</option>
+              <option value="kill">kill</option>
+            </select>
+          </Field>
+
+          {form.action === 'sendInput' && (
+            <Field label="Payload">
+              <textarea
+                value={form.payload}
+                onChange={(e) => setForm({ ...form, payload: e.target.value })}
+                placeholder={'y\\r'}
+                rows={2}
+                className={`${inputCls} font-mono`}
+              />
+              <span className="text-[11px] text-text-4">
+                Sent verbatim — use <code className="font-mono">\r</code> for Enter.
+              </span>
+            </Field>
+          )}
+
+          <Field label="Cooldown (ms)">
+            <input
+              type="number"
+              min={0}
+              value={form.cooldownMs}
+              onChange={(e) =>
+                setForm({ ...form, cooldownMs: Number(e.target.value) || 0 })
+              }
+              className={`${inputCls} w-40`}
+            />
+          </Field>
+
+          <label className="flex items-center gap-2 text-sm text-text-2">
+            <input
+              type="checkbox"
+              checked={form.enabled}
+              onChange={(e) => setForm({ ...form, enabled: e.target.checked })}
+              className="h-3.5 w-3.5 accent-accent-500"
+            />
+            Enabled
+          </label>
         </div>
+
+        <footer className="flex items-center justify-between gap-3 border-t border-border-soft bg-bg-2 px-5 py-3">
+          <div className="min-w-0 flex-1">
+            {error && (
+              <div className="flex items-start gap-1.5 rounded-md border border-status-attention/30 bg-status-attention/10 px-2.5 py-1.5 text-xs text-status-attention">
+                <AlertCircle size={12} strokeWidth={1.75} className="mt-0.5 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={cancel}
+              className="rounded-md px-3 py-1.5 text-sm text-text-3 hover:bg-bg-3 hover:text-text-1"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void onSave()}
+              className="flex items-center gap-1.5 rounded-md bg-accent-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-600"
+            >
+              Save
+            </button>
+          </div>
+        </footer>
       </div>
     </div>
   )
@@ -201,8 +260,10 @@ interface FieldProps {
 
 function Field({ label, children }: FieldProps) {
   return (
-    <label className="flex flex-col gap-1 text-xs text-white/70">
-      <span className="text-[11px] uppercase tracking-wide text-white/40">{label}</span>
+    <label className="flex flex-col gap-1.5">
+      <span className="text-[10px] font-medium uppercase tracking-wide text-text-4">
+        {label}
+      </span>
       {children}
     </label>
   )

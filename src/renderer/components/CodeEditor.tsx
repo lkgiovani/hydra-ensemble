@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
+import { Code2, File as FileIcon, Save, X } from 'lucide-react'
 import { useEditor } from '../state/editor'
 import { useSessions } from '../state/sessions'
 import FileTree from './editor/FileTree'
@@ -49,85 +50,127 @@ export default function CodeEditor({ open, onClose }: Props) {
   const activeFile = openFiles.find((f) => f.path === activeFilePath) ?? null
 
   const overlay = (
-    <div className="fixed inset-0 z-50 flex flex-col bg-[#0a0a0c]/95 backdrop-blur-sm">
-      <header className="flex items-center justify-between border-b border-white/10 bg-[#16161a] px-4 py-2 text-xs text-white/60">
-        <div className="flex items-center gap-3">
-          <span className="font-mono text-[11px] font-bold tracking-wider text-white/80">
-            EDITOR
-          </span>
-          {root && <span className="truncate text-white/40">{root}</span>}
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded px-2 py-1 text-xs text-white/60 hover:bg-white/10 hover:text-white"
-        >
-          close (esc)
-        </button>
-      </header>
-      <div className="flex flex-1 overflow-hidden">
-        <aside className="w-64 shrink-0 overflow-y-auto border-r border-white/10 bg-[#101014]">
-          {root ? (
-            <FileTree root={root} onOpenFile={(p) => void openFile(p)} />
-          ) : (
-            <div className="p-3 text-xs text-white/40">no active session</div>
-          )}
-        </aside>
-        <section className="flex flex-1 flex-col overflow-hidden">
-          <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-white/10 bg-[#16161a] px-2 py-1">
-            {openFiles.length === 0 && (
-              <div className="px-2 text-[11px] text-white/40">no file open</div>
-            )}
-            {openFiles.map((f) => {
-              const name = f.path.split('/').pop() ?? f.path
-              const active = f.path === activeFilePath
-              return (
-                <div
-                  key={f.path}
-                  className={`flex items-center gap-1 rounded px-2 py-0.5 text-[11px] ${
-                    active ? 'bg-white/10 text-white' : 'text-white/60 hover:bg-white/5'
-                  }`}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setActive(f.path)}
-                    className="truncate"
-                    title={f.path}
-                  >
-                    {name}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => closeFile(f.path)}
-                    className="text-white/40 hover:text-white"
-                    aria-label="close tab"
-                  >
-                    x
-                  </button>
-                </div>
-              )
-            })}
-          </div>
-          <div className="flex-1 overflow-hidden bg-[#0d0d0f]">
-            {activeFile && activeFile.encoding === 'utf-8' ? (
-              <CodeMirrorView
-                key={activeFile.path}
-                path={activeFile.path}
-                initial={activeFile.bytes}
-                onChange={(text) => updateActiveBuffer(text)}
-                onSave={() => void saveActive()}
-              />
-            ) : activeFile ? (
-              <div className="flex h-full items-center justify-center text-xs text-white/40">
-                binary file (size {activeFile.size} bytes) cannot be displayed
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-bg-0/85 p-6 backdrop-blur-md"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
+    >
+      <div className="df-fade-in flex h-[90vh] w-[90vw] max-w-[1600px] flex-col overflow-hidden rounded-lg border border-border-mid bg-bg-2 shadow-pop">
+        <header className="flex items-center justify-between border-b border-border-soft px-5 py-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <Code2 size={16} strokeWidth={1.75} className="text-text-2" />
+            <div className="text-sm font-semibold text-text-1">Editor</div>
+            {root && (
+              <div className="truncate font-mono text-xs text-text-4" title={root}>
+                {root}
               </div>
+            )}
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => void saveActive()}
+              disabled={!activeFile || activeFile.encoding !== 'utf-8'}
+              className="flex items-center gap-1.5 rounded-md border border-border-soft bg-bg-3 px-2.5 py-1 text-xs text-text-2 hover:bg-bg-4 disabled:cursor-not-allowed disabled:opacity-40"
+              title="Save (Cmd/Ctrl+S)"
+            >
+              <Save size={13} strokeWidth={1.75} />
+              Save
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md p-1.5 text-text-3 hover:bg-bg-3 hover:text-text-1"
+              aria-label="Close editor"
+              title="Esc"
+            >
+              <X size={16} strokeWidth={1.75} />
+            </button>
+          </div>
+        </header>
+        <div className="flex flex-1 overflow-hidden">
+          <aside className="df-scroll w-64 shrink-0 overflow-y-auto border-r border-border-soft bg-bg-2">
+            {root ? (
+              <FileTree root={root} onOpenFile={(p) => void openFile(p)} />
             ) : (
-              <div className="flex h-full items-center justify-center text-xs text-white/40">
-                pick a file from the tree
+              <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center">
+                <FileIcon size={28} strokeWidth={1.25} className="text-text-4" />
+                <div className="text-xs text-text-2">No active session</div>
+                <div className="text-[11px] text-text-4">
+                  Open a session to browse its files.
+                </div>
               </div>
             )}
-          </div>
-        </section>
+          </aside>
+          <section className="flex flex-1 flex-col overflow-hidden bg-bg-1">
+            <div className="df-scroll flex shrink-0 items-center gap-0.5 overflow-x-auto border-b border-border-soft bg-bg-2 px-2 pt-2">
+              {openFiles.length === 0 && (
+                <div className="px-3 py-2 text-xs text-text-4">No file open</div>
+              )}
+              {openFiles.map((f) => {
+                const name = f.path.split('/').pop() ?? f.path
+                const active = f.path === activeFilePath
+                return (
+                  <div
+                    key={f.path}
+                    className={`group flex items-center gap-2 rounded-t-md px-3 py-1.5 text-xs ${
+                      active
+                        ? 'border-t-2 border-accent-500 bg-bg-1 text-text-1'
+                        : 'border-t-2 border-transparent bg-bg-3 text-text-3 hover:bg-bg-4 hover:text-text-2'
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setActive(f.path)}
+                      className="max-w-[14rem] truncate text-left"
+                      title={f.path}
+                    >
+                      {name}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => closeFile(f.path)}
+                      className={`rounded p-0.5 text-text-4 hover:bg-bg-4 hover:text-text-1 ${
+                        active ? '' : 'opacity-0 group-hover:opacity-100'
+                      }`}
+                      aria-label="Close tab"
+                    >
+                      <X size={12} strokeWidth={2} />
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+            <div className="flex-1 overflow-hidden bg-bg-1 p-3.5">
+              {activeFile && activeFile.encoding === 'utf-8' ? (
+                <CodeMirrorView
+                  key={activeFile.path}
+                  path={activeFile.path}
+                  initial={activeFile.bytes}
+                  onChange={(text) => updateActiveBuffer(text)}
+                  onSave={() => void saveActive()}
+                />
+              ) : activeFile ? (
+                <div className="flex h-full flex-col items-center justify-center gap-2">
+                  <FileIcon size={32} strokeWidth={1.25} className="text-text-4" />
+                  <div className="text-sm text-text-2">Binary file</div>
+                  <div className="text-xs text-text-4">
+                    {activeFile.size.toLocaleString()} bytes — cannot be displayed
+                  </div>
+                </div>
+              ) : (
+                <div className="flex h-full flex-col items-center justify-center gap-2">
+                  <FileIcon size={32} strokeWidth={1.25} className="text-text-4" />
+                  <div className="text-sm text-text-2">No file selected</div>
+                  <div className="text-xs text-text-4">
+                    Pick a file from the tree to start editing.
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
       </div>
     </div>
   )

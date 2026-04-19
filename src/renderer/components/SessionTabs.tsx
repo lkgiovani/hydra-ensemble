@@ -1,4 +1,6 @@
+import { Plus, X } from 'lucide-react'
 import { useSessions } from '../state/sessions'
+import SessionStatePill from './SessionStatePill'
 
 export default function SessionTabs() {
   const sessions = useSessions((s) => s.sessions)
@@ -10,52 +12,51 @@ export default function SessionTabs() {
 
   if (sessions.length === 0) {
     return (
-      <div className="flex items-center gap-2 border-b border-white/10 bg-[#16161a] px-3 py-1">
+      <div className="flex h-9 shrink-0 items-center gap-3 border-b border-border-soft bg-bg-1 px-3">
         <button
           type="button"
           onClick={() => create({})}
           disabled={isCreating}
-          className="rounded bg-emerald-500/20 px-3 py-1 text-xs text-emerald-300 hover:bg-emerald-500/30 disabled:opacity-50"
+          className="df-lift inline-flex items-center gap-1.5 rounded-md bg-accent-500 px-2.5 py-1 text-xs font-medium text-white hover:bg-accent-600 disabled:opacity-50"
         >
-          {isCreating ? 'creating…' : '+ new claude session'}
+          <Plus size={14} strokeWidth={1.75} />
+          <span>{isCreating ? 'creating…' : 'new claude session'}</span>
         </button>
-        <span className="text-xs text-white/40">no sessions yet</span>
+        <span className="text-xs text-text-4">no sessions yet</span>
       </div>
     )
   }
 
   return (
-    <div className="flex items-center gap-1 overflow-x-auto border-b border-white/10 bg-[#16161a] px-2 py-1">
+    <div className="df-scroll flex h-9 shrink-0 items-stretch gap-0.5 overflow-x-auto border-b border-border-soft bg-bg-1 pl-1 pr-2">
       {sessions.map((s) => {
         const active = s.id === activeId
         return (
           <div
             key={s.id}
-            className={`group flex shrink-0 items-center gap-2 rounded px-3 py-1 text-xs ${
+            className={`group relative flex shrink-0 items-center gap-2 px-3 text-xs transition-colors ${
               active
-                ? 'bg-white/10 text-white'
-                : 'text-white/60 hover:bg-white/5 hover:text-white/90'
+                ? 'border-t-2 border-accent-500 bg-bg-1 text-text-1 -mt-px'
+                : 'mt-0.5 border-t-2 border-transparent text-text-3 hover:bg-bg-2 hover:text-text-2'
             }`}
           >
             <button
               type="button"
               onClick={() => setActive(s.id)}
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 py-1.5"
               title={`${s.name} · ${s.claudeConfigDir}`}
             >
-              <span
-                className={`h-2 w-2 rounded-full ${stateColor(s.state)}`}
-                aria-hidden
-              />
-              <span className="font-medium">{s.name}</span>
+              <SessionStatePill state={s.state} label={false} />
+              <span className={active ? 'font-medium' : ''}>{s.name}</span>
             </button>
             <button
               type="button"
               onClick={() => destroy(s.id)}
-              className="text-white/30 opacity-0 transition group-hover:opacity-100 hover:text-red-400"
+              className="flex h-4 w-4 items-center justify-center rounded text-text-4 opacity-0 transition hover:bg-bg-3 hover:text-status-attention group-hover:opacity-100"
               title="close session"
+              aria-label="close session"
             >
-              ×
+              <X size={12} strokeWidth={1.75} />
             </button>
           </div>
         )
@@ -64,26 +65,12 @@ export default function SessionTabs() {
         type="button"
         onClick={() => create({})}
         disabled={isCreating}
-        className="ml-2 shrink-0 rounded px-2 py-1 text-xs text-white/60 hover:bg-white/5 hover:text-white/90 disabled:opacity-50"
+        className="ml-1 inline-flex shrink-0 items-center gap-1 self-center rounded-sm px-2 py-1 text-xs text-text-3 transition-colors hover:bg-bg-3 hover:text-text-1 disabled:opacity-50"
         title="new session"
+        aria-label="new session"
       >
-        +
+        <Plus size={14} strokeWidth={1.75} />
       </button>
     </div>
   )
-}
-
-function stateColor(state: string | undefined): string {
-  switch (state) {
-    case 'generating':
-      return 'bg-emerald-400'
-    case 'thinking':
-      return 'bg-yellow-400'
-    case 'userInput':
-      return 'bg-sky-400'
-    case 'needsAttention':
-      return 'bg-red-400'
-    default:
-      return 'bg-white/30'
-  }
 }

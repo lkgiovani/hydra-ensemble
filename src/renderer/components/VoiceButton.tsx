@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { AlertCircle, Mic } from 'lucide-react'
 import { VoiceRecorder } from '../voice/recorder'
 import { useSessions } from '../state/sessions'
 
@@ -73,20 +74,21 @@ export default function VoiceButton() {
   if (!supported) return null
 
   return (
-    <div className="absolute bottom-3 right-3 z-30 flex items-center gap-2">
+    <div className="absolute bottom-6 right-6 z-30 flex items-end gap-2">
       {error && (
-        <span
-          className="rounded bg-red-500/20 px-2 py-0.5 text-[10px] text-red-200"
+        <div
+          className="df-fade-in flex items-center gap-1.5 rounded-md border border-status-attention/30 bg-status-attention/10 px-2.5 py-1.5 text-xs text-status-attention"
           title={error}
         >
-          mic err
-        </span>
+          <AlertCircle size={12} strokeWidth={1.75} />
+          Mic error
+        </div>
       )}
       <select
         value={lang}
         onChange={(e) => setLang(e.target.value)}
-        className="rounded bg-white/10 px-1 py-0.5 text-[10px] text-white/70 outline-none"
-        aria-label="recognition language"
+        className="rounded-md border border-border-soft bg-bg-3 px-2 py-1 text-[11px] text-text-2 hover:bg-bg-4 focus:outline-none"
+        aria-label="Recognition language"
       >
         {LANGS.map((l) => (
           <option key={l.code} value={l.code}>
@@ -98,14 +100,16 @@ export default function VoiceButton() {
         type="button"
         onClick={toggle}
         title="Cmd/Ctrl+Shift+V"
-        className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold text-white shadow-lg transition-colors ${
-          recording
-            ? 'animate-pulse bg-red-500 hover:bg-red-600'
-            : 'bg-sky-500/80 hover:bg-sky-500'
+        className={`flex h-12 w-12 items-center justify-center rounded-full border border-border-mid bg-bg-3 shadow-card transition hover:bg-bg-4 ${
+          recording ? 'border-status-attention/60' : ''
         }`}
-        aria-label={recording ? 'stop recording' : 'start recording'}
+        aria-label={recording ? 'Stop recording' : 'Start recording'}
       >
-        {recording ? 'OFF' : 'MIC'}
+        <Mic
+          size={18}
+          strokeWidth={1.75}
+          className={recording ? 'df-pulse text-status-attention' : 'text-text-2'}
+        />
       </button>
     </div>
   )
