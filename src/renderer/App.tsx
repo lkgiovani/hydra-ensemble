@@ -212,15 +212,11 @@ export default function App() {
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-sm bg-accent-500 df-pulse" />
-              <span className="flex items-baseline gap-1.5">
-                <span className="font-display text-sm font-semibold tracking-tight text-text-1">
-                  Hydra
-                </span>
-                <span className="font-display text-[11px] font-medium tracking-wider text-accent-400">
-                  Ensemble
-                </span>
+              <span className="flex items-baseline gap-1.5 font-mono text-sm font-semibold tracking-tight">
+                <span className="text-text-1">Hydra</span>
+                <span className="text-accent-400">Ensemble</span>
+                <span className="text-text-4">v0.1</span>
               </span>
-              <span className="font-mono text-[10px] text-text-4">v0.1</span>
             </div>
             <span className="h-5 w-px bg-border-soft" aria-hidden />
             <button
