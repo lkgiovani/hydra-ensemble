@@ -43,6 +43,12 @@ export class PtyManager {
       TERM: 'xterm-256color',
       COLORTERM: 'truecolor'
     }
+    // Strip any inherited CLAUDE_CONFIG_DIR so claude reads the host
+    // ~/.claude unconditionally. Without this, sessions that inherit a
+    // user-exported CLAUDE_CONFIG_DIR (set in .bashrc, parent shell, or
+    // legacy shadow runs) end up logged-out and asking for theme setup
+    // again because they read an empty config dir.
+    delete env['CLAUDE_CONFIG_DIR']
     const cwd = this.resolveCwd(opts.cwd)
 
     const spawnAt = Date.now()
@@ -56,7 +62,8 @@ export class PtyManager {
         cwd,
         cols: opts.cols,
         rows: opts.rows,
-        envClaudeConfigDir: opts.env?.['CLAUDE_CONFIG_DIR']
+        envClaudeConfigDir: env['CLAUDE_CONFIG_DIR'] ?? '<unset>',
+        inheritedClaudeConfigDir: process.env['CLAUDE_CONFIG_DIR'] ?? '<unset>'
       })
       p = nodePty.spawn(shell, args, {
         name: 'xterm-256color',
