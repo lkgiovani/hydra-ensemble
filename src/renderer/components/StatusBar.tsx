@@ -53,61 +53,80 @@ export default function StatusBar() {
 
   return (
     <div
-      className="flex h-7 shrink-0 items-center gap-4 border-t border-border-soft bg-bg-2 px-3 text-[11px] text-text-3"
+      className="flex h-6 shrink-0 items-center gap-3 border-t border-border-soft bg-bg-2 px-3 font-mono text-[10px] text-text-3"
       role="status"
     >
       {active ? (
         <>
-          <span className="flex items-center gap-1.5 font-mono text-text-2" title="current branch">
-            <GitBranch size={12} strokeWidth={1.75} className="text-text-4" />
-            <span className="truncate">{branch}</span>
-          </span>
-          <span className="flex items-center gap-1.5" title="model">
-            <Activity size={12} strokeWidth={1.75} className="text-text-4" />
-            <span className="font-mono text-text-2">{model}</span>
-          </span>
+          <Cell label="branch" icon={<GitBranch size={10} strokeWidth={1.75} />}>
+            <span className="text-text-2">{branch}</span>
+          </Cell>
+          <Sep />
+          <Cell label="model" icon={<Activity size={10} strokeWidth={1.75} />}>
+            <span className="text-text-2">{model}</span>
+          </Cell>
+          <Sep />
           <SessionStatePill state={active.state ?? 'idle'} />
         </>
       ) : (
         <span className="flex items-center gap-2 text-text-4">
-          <span className="h-1.5 w-1.5 rounded-full bg-text-4" />
+          <span className="h-1.5 w-1.5 rounded-sm bg-text-4" />
           <span>no active session</span>
         </span>
       )}
 
-      <span className="ml-auto flex items-center gap-4">
+      <span className="ml-auto flex items-center gap-3 tabular-nums">
         {sessionCount > 0 ? (
           <>
-            <span
-              title="aggregate input/output tokens"
-              className="flex items-center gap-1.5 font-mono tabular-nums"
-            >
-              <Hash size={12} strokeWidth={1.75} className="text-text-4" />
+            <Cell label="tokens" icon={<Hash size={10} strokeWidth={1.75} />}>
               <span className="text-text-2">{formatTokens(totals.tokensIn)}</span>
-              <span className="text-text-4">in</span>
+              <span className="text-text-4">↓</span>
               <span className="text-text-2">{formatTokens(totals.tokensOut)}</span>
-              <span className="text-text-4">out</span>
-            </span>
-
-            <span
-              title="aggregate cost across all sessions"
-              className={`flex items-center gap-1 font-mono tabular-nums ${
-                hasCost ? 'text-status-generating' : 'text-text-3'
-              }`}
+              <span className="text-text-4">↑</span>
+            </Cell>
+            <Sep />
+            <Cell
+              label="cost"
+              icon={<DollarSign size={10} strokeWidth={1.75} />}
+              className={hasCost ? 'text-status-generating' : ''}
             >
-              <DollarSign size={12} strokeWidth={1.75} />
-              <span>{formatCost(totals.cost)}</span>
-            </span>
+              <span className={hasCost ? 'text-status-generating' : 'text-text-2'}>
+                {formatCost(totals.cost)}
+              </span>
+            </Cell>
+            <Sep />
           </>
         ) : null}
 
-        <span title="active sessions" className="flex items-center gap-1.5">
-          <span className="font-mono tabular-nums text-text-2">{sessionCount}</span>
-          <span className="text-text-4">
-            {sessionCount === 1 ? 'session' : 'sessions'}
-          </span>
+        <span className="flex items-center gap-1">
+          <span className="text-text-4">sessions</span>
+          <span className="text-text-2">{sessionCount}</span>
         </span>
       </span>
     </div>
   )
+}
+
+function Cell({
+  label,
+  icon,
+  children,
+  className
+}: {
+  label: string
+  icon?: React.ReactNode
+  children: React.ReactNode
+  className?: string
+}) {
+  return (
+    <span className={`flex items-center gap-1.5 ${className ?? ''}`}>
+      {icon ? <span className="text-text-4">{icon}</span> : null}
+      <span className="text-text-4">{label}</span>
+      {children}
+    </span>
+  )
+}
+
+function Sep() {
+  return <span className="text-text-4">|</span>
 }

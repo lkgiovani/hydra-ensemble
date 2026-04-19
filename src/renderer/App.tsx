@@ -176,27 +176,31 @@ export default function App() {
         <header className="flex h-11 shrink-0 items-center justify-between border-b border-border-soft bg-bg-2 px-3">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-accent-400 df-pulse" />
-              <span className="font-sans text-sm font-semibold tracking-tight text-text-1">
+              <span className="h-2 w-2 rounded-sm bg-accent-500 df-pulse" />
+              <span className="font-display text-sm font-semibold tracking-tight text-text-1">
                 Hydra Ensemble
               </span>
+              <span className="font-mono text-[10px] text-text-4">v0.1</span>
             </div>
+            <span className="h-5 w-px bg-border-soft" aria-hidden />
             <button
               type="button"
               onClick={() => setDrawerOpen((v) => !v)}
-              className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition ${
+              className={`flex items-center gap-1.5 rounded-sm border px-2 py-1 text-xs transition ${
                 drawerOpen
-                  ? 'bg-bg-4 text-text-1'
-                  : 'text-text-3 hover:bg-bg-3 hover:text-text-1'
+                  ? 'border-border-mid bg-bg-4 text-text-1'
+                  : 'border-transparent text-text-3 hover:bg-bg-3 hover:text-text-1'
               }`}
               title="toggle projects (Cmd/Ctrl+B)"
             >
-              <FolderTree size={13} strokeWidth={1.75} />
-              <span>{currentProject?.name ?? 'Projects'}</span>
+              <FolderTree size={12} strokeWidth={1.75} />
+              <span className="font-mono">
+                {currentProject?.name ?? 'projects'}
+              </span>
             </button>
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-0.5">
             <HeaderButton
               icon={<GitPullRequest size={13} strokeWidth={1.75} />}
               label="PRs"
@@ -206,25 +210,27 @@ export default function App() {
             />
             <HeaderButton
               icon={<Wand2 size={13} strokeWidth={1.75} />}
-              label="Watchdogs"
+              label="watchdogs"
               shortcut="⌘⇧W"
               onClick={togglePanel}
             />
             <HeaderButton
               icon={<Code2 size={13} strokeWidth={1.75} />}
-              label="Editor"
+              label="editor"
               shortcut="⌘E"
               onClick={toggleEditor}
             />
             <HeaderButton
               icon={<LayoutDashboard size={13} strokeWidth={1.75} />}
-              label="Dashboard"
+              label="dashboard"
               shortcut="⌘D"
               onClick={toggleDashboard}
             />
-            <div className="ml-2 flex items-center gap-2 border-l border-border-soft pl-3 font-mono text-[11px] text-text-3">
-              <span>{window.api.platform.os}</span>
-              <span>·</span>
+            <div className="ml-2 flex items-center gap-1.5 border-l border-border-soft pl-3 font-mono text-[10px]">
+              <span className="text-text-4">os</span>
+              <span className="text-text-2">{window.api.platform.os}</span>
+              <span className="text-text-4">/</span>
+              <span className="text-text-4">claude</span>
               <span
                 className={
                   claudePath === undefined
@@ -235,10 +241,10 @@ export default function App() {
                 }
               >
                 {claudePath === undefined
-                  ? 'resolving…'
+                  ? '?'
                   : claudePath === null
-                    ? 'no claude'
-                    : 'claude'}
+                    ? 'missing'
+                    : 'ok'}
               </span>
             </div>
           </div>
@@ -458,10 +464,10 @@ function HeaderButton({ icon, label, shortcut, onClick, disabled }: HeaderButton
       onClick={onClick}
       disabled={disabled}
       title={shortcut ? `${label} (${shortcut})` : label}
-      className="group flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-text-3 transition hover:bg-bg-3 hover:text-text-1 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-text-3"
+      className="group flex items-center gap-1.5 rounded-sm border border-transparent px-2 py-1 text-xs text-text-3 transition hover:border-border-soft hover:bg-bg-3 hover:text-text-1 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-text-3"
     >
       {icon}
-      <span>{label}</span>
+      <span className="font-mono">{label}</span>
     </button>
   )
 }
