@@ -1,6 +1,9 @@
 import * as nodePty from 'node-pty'
 import type { IPty } from 'node-pty'
 import type { BrowserWindow } from 'electron'
+import { existsSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { isAbsolute } from 'node:path'
 import type { PtySpawnOptions, PtySpawnResult } from '../../shared/types'
 
 export class PtyManager {
@@ -24,14 +27,15 @@ export class PtyManager {
       TERM: 'xterm-256color',
       COLORTERM: 'truecolor'
     }
+    const cwd = this.resolveCwd(opts.cwd)
 
     let p: IPty
     try {
       p = nodePty.spawn(shell, args, {
         name: 'xterm-256color',
-        cols: opts.cols,
-        rows: opts.rows,
-        cwd: opts.cwd,
+        cols: Math.max(opts.cols, 1),
+        rows: Math.max(opts.rows, 1),
+        cwd,
         env,
         useConpty: process.platform === 'win32'
       })
@@ -97,7 +101,13 @@ export class PtyManager {
   }
 
   private defaultArgs(): string[] {
-    if (process.platform === 'win32') return []
-    return ['--login']
+    // Empty args: shells run interactively when stdin is a PTY.
+    // Avoid `--login` since some user profiles abort on non-tty checks.
+    return []
+  }
+
+  private resolveCwd(requested: string | undefined): string {
+    if (requested && isAbsolute(requested) && existsSync(requested)) return requested
+    return homedir()
   }
 }

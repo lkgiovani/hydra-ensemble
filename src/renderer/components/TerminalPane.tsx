@@ -16,6 +16,11 @@ export default function TerminalPane({ sessionId, cwd }: Props) {
     const container = containerRef.current
     if (!container) return
 
+    // Unique per-mount PTY id so React StrictMode's double-mount
+    // doesn't deliver the exit event of the killed first instance
+    // to the second mount's listeners.
+    const ptyId = `${sessionId}:${crypto.randomUUID()}`
+
     const term = new Terminal({
       fontFamily:
         'ui-monospace, "JetBrains Mono", "IBM Plex Mono", Menlo, Consolas, monospace',
@@ -50,12 +55,10 @@ export default function TerminalPane({ sessionId, cwd }: Props) {
 
     fitSafely()
 
-    const initialCwd = cwd ?? '.'
-
     void window.api.pty
       .spawn({
-        sessionId,
-        cwd: initialCwd,
+        sessionId: ptyId,
+        cwd: cwd ?? '',
         cols: term.cols,
         rows: term.rows
       })
@@ -67,10 +70,10 @@ export default function TerminalPane({ sessionId, cwd }: Props) {
       })
 
     const offData = window.api.pty.onData((evt) => {
-      if (evt.sessionId === sessionId) term.write(evt.data)
+      if (evt.sessionId === ptyId) term.write(evt.data)
     })
     const offExit = window.api.pty.onExit((evt) => {
-      if (evt.sessionId === sessionId) {
+      if (evt.sessionId === ptyId) {
         term.writeln(
           `\r\n\x1b[33m[hydra-ensemble] pty exited (code=${evt.exitCode}${evt.signal ? `, signal=${evt.signal}` : ''})\x1b[0m`
         )
@@ -78,12 +81,12 @@ export default function TerminalPane({ sessionId, cwd }: Props) {
     })
 
     const onInputDispose = term.onData((data) => {
-      void window.api.pty.write(sessionId, data)
+      void window.api.pty.write(ptyId, data)
     })
 
     const ro = new ResizeObserver(() => {
       fitSafely()
-      void window.api.pty.resize(sessionId, term.cols, term.rows)
+      void window.api.pty.resize(ptyId, term.cols, term.rows)
     })
     ro.observe(container)
 
@@ -93,7 +96,7 @@ export default function TerminalPane({ sessionId, cwd }: Props) {
       offData()
       offExit()
       onInputDispose.dispose()
-      void window.api.pty.kill(sessionId)
+      void window.api.pty.kill(ptyId)
       term.dispose()
     }
   }, [sessionId, cwd])
