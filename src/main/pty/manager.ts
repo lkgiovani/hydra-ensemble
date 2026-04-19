@@ -6,12 +6,28 @@ import { homedir } from 'node:os'
 import { isAbsolute } from 'node:path'
 import type { PtySpawnOptions, PtySpawnResult } from '../../shared/types'
 
+export type PtyDataListener = (data: string) => void
+
 export class PtyManager {
   private sessions = new Map<string, IPty>()
   private window: BrowserWindow | null = null
+  private dataListeners = new Map<string, Set<PtyDataListener>>()
 
   attachWindow(win: BrowserWindow): void {
     this.window = win
+  }
+
+  /** Subscribe to PTY data for a specific session. Returns unsubscribe. */
+  onData(sessionId: string, listener: PtyDataListener): () => void {
+    let set = this.dataListeners.get(sessionId)
+    if (!set) {
+      set = new Set()
+      this.dataListeners.set(sessionId, set)
+    }
+    set.add(listener)
+    return () => {
+      this.dataListeners.get(sessionId)?.delete(listener)
+    }
   }
 
   spawn(opts: PtySpawnOptions): PtySpawnResult {
@@ -57,6 +73,17 @@ export class PtyManager {
     p.onData((data) => {
       totalBytes += data.length
       this.window?.webContents.send('pty:data', { sessionId: opts.sessionId, data })
+      const listeners = this.dataListeners.get(opts.sessionId)
+      if (listeners) {
+        for (const l of listeners) {
+          try {
+            l(data)
+          } catch (err) {
+            // eslint-disable-next-line no-console
+            console.error('[pty] data listener threw:', (err as Error).message)
+          }
+        }
+      }
     })
     p.onExit(({ exitCode, signal }) => {
       // eslint-disable-next-line no-console
@@ -67,6 +94,7 @@ export class PtyManager {
         signal
       })
       this.sessions.delete(opts.sessionId)
+      this.dataListeners.delete(opts.sessionId)
     })
 
     this.sessions.set(opts.sessionId, p)
@@ -94,6 +122,7 @@ export class PtyManager {
       // already dead
     }
     this.sessions.delete(sessionId)
+    this.dataListeners.delete(sessionId)
   }
 
   killAll(): void {
@@ -105,6 +134,7 @@ export class PtyManager {
       }
       this.sessions.delete(id)
     }
+    this.dataListeners.clear()
   }
 
   private defaultShell(): string {

@@ -1,13 +1,9 @@
 import { app } from 'electron'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { SessionMeta } from '../shared/types'
+import type { SessionMeta, ToolkitItem, WatchdogRule } from '../shared/types'
 
-export interface ToolkitItem {
-  id: string
-  label: string
-  command: string
-}
+export type { ToolkitItem } from '../shared/types'
 
 export interface SavedProject {
   path: string
@@ -19,12 +15,14 @@ interface StoreShape {
   sessions: SessionMeta[]
   projects: SavedProject[]
   toolkit: ToolkitItem[]
+  watchdogs: WatchdogRule[]
 }
 
 const DEFAULTS: StoreShape = {
   sessions: [],
   projects: [],
-  toolkit: []
+  toolkit: [],
+  watchdogs: []
 }
 
 let cachePath: string | null = null
@@ -41,7 +39,8 @@ export function initStore(): void {
       cache = {
         sessions: parsed.sessions ?? [],
         projects: parsed.projects ?? [],
-        toolkit: parsed.toolkit ?? []
+        toolkit: parsed.toolkit ?? [],
+        watchdogs: parsed.watchdogs ?? []
       }
     } catch {
       cache = { ...DEFAULTS }
