@@ -45,6 +45,7 @@ export class PtyManager {
     }
     const cwd = this.resolveCwd(opts.cwd)
 
+    const spawnAt = Date.now()
     let p: IPty
     try {
       // eslint-disable-next-line no-console
@@ -54,7 +55,8 @@ export class PtyManager {
         args,
         cwd,
         cols: opts.cols,
-        rows: opts.rows
+        rows: opts.rows,
+        envClaudeConfigDir: opts.env?.['CLAUDE_CONFIG_DIR']
       })
       p = nodePty.spawn(shell, args, {
         name: 'xterm-256color',
@@ -70,7 +72,16 @@ export class PtyManager {
     }
 
     let totalBytes = 0
+    let firstByteAt: number | null = null
     p.onData((data) => {
+      if (firstByteAt === null) {
+        firstByteAt = Date.now()
+        // eslint-disable-next-line no-console
+        console.log('[pty] first-byte', {
+          sessionId: opts.sessionId,
+          delayMs: firstByteAt - spawnAt
+        })
+      }
       totalBytes += data.length
       this.window?.webContents.send('pty:data', { sessionId: opts.sessionId, data })
       const listeners = this.dataListeners.get(opts.sessionId)
@@ -87,7 +98,14 @@ export class PtyManager {
     })
     p.onExit(({ exitCode, signal }) => {
       // eslint-disable-next-line no-console
-      console.log('[pty] exit', { sessionId: opts.sessionId, exitCode, signal, totalBytes })
+      console.log('[pty] exit', {
+        sessionId: opts.sessionId,
+        exitCode,
+        signal,
+        totalBytes,
+        livedMs: Date.now() - spawnAt,
+        firstByteMs: firstByteAt ? firstByteAt - spawnAt : null
+      })
       this.window?.webContents.send('pty:exit', {
         sessionId: opts.sessionId,
         exitCode,
@@ -116,6 +134,8 @@ export class PtyManager {
   kill(sessionId: string): void {
     const p = this.sessions.get(sessionId)
     if (!p) return
+    // eslint-disable-next-line no-console
+    console.log('[pty] kill', { sessionId, callsite: new Error().stack?.split('\n')[2]?.trim() })
     try {
       p.kill()
     } catch {

@@ -277,8 +277,12 @@ export class SessionManager {
 
     if (!opts.shellOnly) {
       const claudePath = resolveClaudePath()
+      // No `exec` on purpose: when claude exits (intended /quit, OAuth
+      // browser flow, crash) the bash stays alive, prints the prompt,
+      // and the user can either type `claude` to re-enter or use the
+      // restart overlay. With exec the PTY would die with the agent.
       const launch = claudePath
-        ? `clear && exec "${claudePath}"\r`
+        ? `clear && "${claudePath}"\r`
         : `clear && echo "[hydra-ensemble] claude binary not found in PATH"\r`
       setTimeout(() => {
         this.deps.pty.write(ptyId, launch)
