@@ -19,6 +19,7 @@ import ActiveAgentBar from './components/ActiveAgentBar'
 import ToolkitEditorDialog from './components/Toolkit/EditorDialog'
 import WatchdogPanel from './components/Watchdog/Panel'
 import Toasts from './components/Toasts'
+import CommandPalette from './components/CommandPalette'
 import { useSessions } from './state/sessions'
 import { useSessionsUi } from './state/sessionsExtra'
 import { useEditor } from './state/editor'
@@ -30,6 +31,7 @@ import { useWatchdog } from './state/watchdog'
 export default function App() {
   const [claudePath, setClaudePath] = useState<string | null | undefined>(undefined)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [paletteOpen, setPaletteOpen] = useState(false)
 
   const sessions = useSessions((s) => s.sessions)
   const activeId = useSessions((s) => s.activeId)
@@ -77,6 +79,11 @@ export default function App() {
       if (!mod) return
       const key = e.key.toLowerCase()
 
+      if (key === 'k' && !e.shiftKey) {
+        e.preventDefault()
+        setPaletteOpen((v) => !v)
+        return
+      }
       if (key === 'd' && !e.shiftKey) {
         e.preventDefault()
         toggleDashboard()
@@ -302,6 +309,7 @@ export default function App() {
       <WatchdogPanel />
       <ToolkitEditorDialog />
       <Toasts />
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </div>
   )
 }
