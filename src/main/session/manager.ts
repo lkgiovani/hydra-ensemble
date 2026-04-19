@@ -9,6 +9,7 @@ import { resolveClaudePath } from '../claude/resolve'
 import {
   createIsolatedSession,
   destroyIsolatedSession,
+  getHostClaudeDir,
   getSessionEnvOverrides,
   type IsolatedSession
 } from '../claude/config-isolation'
@@ -37,13 +38,20 @@ export class SessionManager {
   private rehydrated = false
 
   constructor(private deps: SessionManagerDeps) {
-    // Load persisted metas into memory without spawning — PTYs don't survive
-    // restart, but the isolated CLAUDE_CONFIG_DIR does. rehydrate() respawns
-    // PTYs inside the existing config dirs so Claude picks up the same
-    // projects/JSONL history and shared credentials.
+    // Load persisted metas into memory without spawning. We no longer require
+    // the legacy shadow claudeConfigDir to exist — Claude reads the host
+    // ~/.claude directly now so credentials + MCP state are shared across
+    // sessions (see config-isolation.ts for the rationale).
+    const host = getHostClaudeDir()
     for (const meta of getStore().sessions) {
-      if (!existsSync(meta.claudeConfigDir)) continue
-      this.sessions.set(meta.id, { ...meta, state: 'idle', ptyId: meta.id })
+      // Upgrade old metas that still point at a shadow dir to the host dir.
+      const claudeConfigDir = existsSync(meta.claudeConfigDir) ? meta.claudeConfigDir : host
+      this.sessions.set(meta.id, {
+        ...meta,
+        claudeConfigDir,
+        state: 'idle',
+        ptyId: meta.id
+      })
     }
   }
 
@@ -66,10 +74,6 @@ export class SessionManager {
 
     const metas = [...this.sessions.values()]
     for (const meta of metas) {
-      if (!existsSync(meta.claudeConfigDir)) {
-        this.sessions.delete(meta.id)
-        continue
-      }
       try {
         this.respawn(meta)
       } catch (err) {

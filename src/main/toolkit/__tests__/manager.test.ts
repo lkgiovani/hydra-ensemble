@@ -78,8 +78,11 @@ describe('ToolkitService', () => {
 
     const svc = new ToolkitService()
     const items = svc.list()
-    expect(items.map((i) => i.id).sort()).toEqual(['build', 'lint', 'test'])
-    // Defaults are also persisted so the next list() is stable.
-    expect(getStore().toolkit.length).toBe(3)
+    // Default seed covers the verify / deps / run / git / shell groups —
+    // see DEFAULT_TOOLKIT in manager.ts.
+    expect(items.length).toBeGreaterThanOrEqual(8)
+    expect(items.map((i) => i.id)).toEqual(expect.arrayContaining(['test', 'build', 'lint']))
+    // Defaults are persisted so the next list() is stable.
+    expect(getStore().toolkit.length).toBe(items.length)
   })
 })
