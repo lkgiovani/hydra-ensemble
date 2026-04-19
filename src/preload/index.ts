@@ -4,18 +4,15 @@ import type {
   Platform,
   PtyDataEvent,
   PtyExitEvent,
-  PtySpawnOptions,
-  PtySpawnResult
+  SessionCreateOptions,
+  SessionMeta
 } from '../shared/types'
 
 const api: HydraEnsembleApi = {
   pty: {
-    spawn: (opts: PtySpawnOptions): Promise<PtySpawnResult> =>
-      ipcRenderer.invoke('pty:spawn', opts),
     write: (sessionId, data) => ipcRenderer.invoke('pty:write', { sessionId, data }),
     resize: (sessionId, cols, rows) =>
       ipcRenderer.invoke('pty:resize', { sessionId, cols, rows }),
-    kill: (sessionId) => ipcRenderer.invoke('pty:kill', { sessionId }),
     onData: (handler) => {
       const listener = (_evt: unknown, event: PtyDataEvent): void => handler(event)
       ipcRenderer.on('pty:data', listener)
@@ -28,6 +25,18 @@ const api: HydraEnsembleApi = {
       ipcRenderer.on('pty:exit', listener)
       return () => {
         ipcRenderer.removeListener('pty:exit', listener)
+      }
+    }
+  },
+  session: {
+    create: (opts: SessionCreateOptions) => ipcRenderer.invoke('session:create', opts),
+    destroy: (id: string) => ipcRenderer.invoke('session:destroy', { id }),
+    list: () => ipcRenderer.invoke('session:list'),
+    onChange: (handler) => {
+      const listener = (_evt: unknown, sessions: SessionMeta[]): void => handler(sessions)
+      ipcRenderer.on('session:changed', listener)
+      return () => {
+        ipcRenderer.removeListener('session:changed', listener)
       }
     }
   },

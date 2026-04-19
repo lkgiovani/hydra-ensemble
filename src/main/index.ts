@@ -2,12 +2,16 @@ import { app, BrowserWindow, shell } from 'electron'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { PtyManager } from './pty/manager'
+import { SessionManager } from './session/manager'
 import { registerPtyIpc } from './ipc/pty'
 import { registerClaudeIpc } from './ipc/claude'
+import { registerSessionIpc } from './ipc/session'
+import { initStore } from './store'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 const ptyManager = new PtyManager()
+let sessionManager: SessionManager | null = null
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -36,6 +40,7 @@ function createWindow(): BrowserWindow {
   })
 
   ptyManager.attachWindow(win)
+  sessionManager?.attachWindow(win)
 
   if (process.env['ELECTRON_RENDERER_URL']) {
     void win.loadURL(process.env['ELECTRON_RENDERER_URL'])
@@ -47,8 +52,11 @@ function createWindow(): BrowserWindow {
 }
 
 app.whenReady().then(() => {
+  initStore()
+  sessionManager = new SessionManager(ptyManager)
   registerPtyIpc(ptyManager)
   registerClaudeIpc()
+  registerSessionIpc(sessionManager)
   createWindow()
 
   app.on('activate', () => {
@@ -57,10 +65,12 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
+  void sessionManager?.destroyAll()
   ptyManager.killAll()
   if (process.platform !== 'darwin') app.quit()
 })
 
 app.on('before-quit', () => {
+  void sessionManager?.destroyAll()
   ptyManager.killAll()
 })
