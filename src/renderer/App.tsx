@@ -122,18 +122,10 @@ export default function App() {
         togglePanelFor('editor')
         return
       }
-      if (key === 'p' && !e.shiftKey) {
-        // ⌘P toggles the projects drawer.
+      if (key === 't' && !e.shiftKey) {
+        // ⌘T toggles the projects drawer.
         e.preventDefault()
         setDrawerOpen((v) => !v)
-        return
-      }
-      if (key === 't' && !e.shiftKey) {
-        // ⌘T opens the Terminals panel — fast path for spawning a shell
-        // next to the agents, matching the user's muscle memory from
-        // VS Code / Cursor.
-        e.preventDefault()
-        togglePanelFor('terminals')
         return
       }
       if (key === 'n' && !e.shiftKey) {
@@ -265,7 +257,7 @@ export default function App() {
                   ? 'border-border-mid bg-bg-4 text-text-1'
                   : 'border-transparent text-text-3 hover:bg-bg-3 hover:text-text-1'
               }`}
-              title="toggle projects (Cmd/Ctrl+P)"
+              title="toggle projects (Cmd/Ctrl+T)"
             >
               <FolderTree size={12} strokeWidth={1.75} />
               <span className="font-mono">

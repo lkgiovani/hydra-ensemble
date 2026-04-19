@@ -50,11 +50,10 @@ export default function HelpOverlay({ open, onClose }: Props) {
       title: 'Panels',
       items: [
         { keys: fmtShortcut('K'), label: 'command palette' },
-        { keys: fmtShortcut('T'), label: 'terminals panel' },
-        { keys: fmtShortcut('P'), label: 'projects drawer' },
+        { keys: fmtShortcut('T'), label: 'projects drawer' },
+        { keys: fmtShortcut('`'), label: 'terminals panel' },
         { keys: fmtShortcut('D'), label: 'dashboard' },
         { keys: fmtShortcut('E'), label: 'code editor' },
-        { keys: fmtShortcut('`'), label: 'terminals (alias)' },
         { keys: `${mod}${shift}P`, label: 'PR inspector' },
         { keys: `${mod}${shift}W`, label: 'watchdogs' },
         { keys: `${mod}${shift}V`, label: 'voice dictation' }
