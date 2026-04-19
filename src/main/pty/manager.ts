@@ -124,8 +124,12 @@ export class PtyManager {
   }
 
   resize(sessionId: string, cols: number, rows: number): void {
+    // Clamp to a sane minimum so a transient layout collapse never tells
+    // the PTY cols=1 (which makes claude wrap text one char per line).
+    const safeCols = Math.max(20, Math.floor(cols))
+    const safeRows = Math.max(5, Math.floor(rows))
     try {
-      this.sessions.get(sessionId)?.resize(cols, rows)
+      this.sessions.get(sessionId)?.resize(safeCols, safeRows)
     } catch {
       // session may have just exited; ignore
     }

@@ -78,6 +78,10 @@ export interface SessionCreateOptions {
   cols: number
   rows: number
   shellOnly?: boolean
+  /** Persisted avatar chosen by the renderer (URL to a local SVG). */
+  avatar?: string
+  /** Persisted accent colour chosen by the renderer. */
+  accentColor?: string
 }
 
 export type SessionCreateResult =

@@ -115,7 +115,9 @@ export class SessionManager {
       claudeConfigDir: isolated.configDir,
       createdAt: new Date().toISOString(),
       ptyId,
-      state: 'idle'
+      state: 'idle',
+      avatar: opts.avatar,
+      accentColor: opts.accentColor
     }
 
     const spawn = this.spawnFor(meta, {

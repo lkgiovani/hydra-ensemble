@@ -18,37 +18,40 @@ export const AGENT_COLORS = [
 ] as const
 
 /**
- * NFT-style avatar gallery — dicebear `pixel-art` style.
+ * NFT-style avatar gallery — 40 pixel-art characters bundled locally so the
+ * app works 100% offline. Sources were generated once from dicebear's
+ * `pixel-art` style (CC0) and saved into `src/renderer/assets/avatars/`.
  *
- * dicebear is a free, CC0, deterministic avatar API. The pixel-art style
- * generates 8-bit characters (face, hat, glasses, clothes) that hit the
- * cryptopunks/NFT vibe without depending on a flaky IPFS gateway.
- *
- * Each seed produces a stable unique character. SVG so it scales crisp.
- * Falls back to the deterministic emoji if the request fails (offline,
- * filtered) — see AgentAvatar.
+ * Vite's import.meta.glob turns every `.svg` file in the dir into a URL
+ * relative to the final bundle, so paths survive dev (HTTP) and packaged
+ * builds (file://) without us having to track them manually.
  */
-const NFT_AVATAR_SEEDS = [
-  'spectre', 'oracle', 'phantom', 'cipher', 'nexus', 'vortex', 'genesis', 'echo',
-  'zenith', 'pulse', 'lucid', 'haven', 'odyssey', 'mirage', 'prism', 'helix',
-  'quantum', 'titan', 'stellar', 'comet', 'apex', 'storm', 'shadow', 'flame',
-  'frost', 'aurora', 'nova', 'rift', 'glyph', 'rune', 'tide', 'arc',
-  'zen', 'orbit', 'flux', 'core', 'pixel', 'spark', 'wave', 'spire'
-]
+const AVATAR_MODULES = import.meta.glob('../assets/avatars/*.svg', {
+  eager: true,
+  query: '?url',
+  import: 'default'
+}) as Record<string, string>
 
-const DICEBEAR_BASE = 'https://api.dicebear.com/9.x/pixel-art/svg'
-
-export const NFT_AVATAR_URLS: readonly string[] = NFT_AVATAR_SEEDS.map(
-  (seed) => `${DICEBEAR_BASE}?seed=${encodeURIComponent(seed)}&radius=10`
-)
+// Sort by path for a stable iteration order — picker grid shouldn't reshuffle
+// between dev and prod builds.
+export const NFT_AVATAR_URLS: readonly string[] = Object.keys(AVATAR_MODULES)
+  .sort()
+  .map((k) => AVATAR_MODULES[k])
+  .filter((v): v is string => typeof v === 'string')
 
 /** Backwards-compat alias used by the picker in AgentEditDialog. */
 export const NFT_APE_URLS = NFT_AVATAR_URLS
 
+/** Pick a deterministic NFT URL for a session id. */
+export function defaultAgentAvatar(seed: string): string {
+  if (NFT_AVATAR_URLS.length === 0) return ''
+  const idx = hashStr(seed + '-nft') % NFT_AVATAR_URLS.length
+  return NFT_AVATAR_URLS[idx] ?? ''
+}
+
 /**
- * Fallback chain for an avatar URL. dicebear is a single CDN, so the chain
- * is just the URL itself — kept as a function so AgentAvatar can later add
- * mirrors without changing call sites.
+ * Fallback chain for an avatar URL. The local bundle is a single source,
+ * kept as a function so AgentAvatar's call sites don't need to change.
  */
 export function avatarFallbackChain(url: string): string[] {
   return [url]
@@ -57,10 +60,16 @@ export function avatarFallbackChain(url: string): string[] {
 /** @deprecated kept for older imports — same as avatarFallbackChain. */
 export const apeGatewayChain = avatarFallbackChain
 
-/** Detect whether an avatar string is a URL (image) vs an emoji. */
+/** Detect whether an avatar string is an image resource vs an emoji.
+ *  Treats absolute URLs, data URIs, and any path-like string (contains '/'
+ *  or a common image extension) as image references. Emoji glyphs are
+ *  never "path-like", so this cleanly partitions the two kinds. */
 export function isAvatarUrl(avatar: string | undefined): boolean {
   if (!avatar) return false
-  return avatar.startsWith('http://') || avatar.startsWith('https://') || avatar.startsWith('data:')
+  if (avatar.startsWith('http://') || avatar.startsWith('https://')) return true
+  if (avatar.startsWith('data:') || avatar.startsWith('blob:')) return true
+  if (avatar.includes('/')) return true
+  return /\.(svg|png|jpe?g|webp|gif)$/i.test(avatar)
 }
 
 function hashStr(s: string): number {

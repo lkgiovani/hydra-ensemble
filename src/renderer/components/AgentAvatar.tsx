@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import type { SessionMeta } from '../../shared/types'
 import {
-  apeGatewayChain,
+  avatarFallbackChain,
+  defaultAgentAvatar,
   defaultAgentColor,
   defaultAgentEmoji,
   hexAlpha,
@@ -16,19 +17,22 @@ interface Props {
 
 export default function AgentAvatar({ session, size = 28, ring = true }: Props) {
   const color = session.accentColor || defaultAgentColor(session.id)
-  const isUrl = isAvatarUrl(session.avatar)
+
+  // Priority: explicit avatar (URL or emoji) → deterministic NFT default
+  // → emoji fallback if the NFT asset ever fails to load.
+  const explicit = session.avatar
+  const resolved = explicit || defaultAgentAvatar(session.id)
+  const isUrl = isAvatarUrl(resolved)
   const fallbackEmoji = defaultAgentEmoji(session.id)
 
-  // Try the requested URL first, then alternate IPFS gateways, then give
-  // up and fall through to the emoji. Resets whenever the avatar changes.
-  const initialChain = isUrl && session.avatar ? apeGatewayChain(session.avatar) : []
+  const initialChain = isUrl ? avatarFallbackChain(resolved) : []
   const [chainIdx, setChainIdx] = useState(0)
   const [imageFailed, setImageFailed] = useState(false)
 
   useEffect(() => {
     setChainIdx(0)
     setImageFailed(false)
-  }, [session.avatar])
+  }, [resolved])
 
   const showImage = isUrl && !imageFailed && initialChain.length > 0
   const currentSrc = showImage ? initialChain[chainIdx] : null
@@ -76,7 +80,7 @@ export default function AgentAvatar({ session, size = 28, ring = true }: Props) 
             filter: `drop-shadow(0 0 6px ${hexAlpha(color, 0.45)})`
           }}
         >
-          {session.avatar && !isUrl ? session.avatar : fallbackEmoji}
+          {explicit && !isAvatarUrl(explicit) ? explicit : fallbackEmoji}
         </span>
       )}
     </div>

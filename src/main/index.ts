@@ -124,8 +124,12 @@ jsonlManager.onAnyUpdate = (update: JsonlUpdate) => {
   })
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   initStore()
+  // One-time migrate host ~/.claude/.credentials.json from any legacy
+  // shadow dir so login persists across newly-spawned sessions.
+  const { migrateLegacyCredentials } = await import('./claude/config-isolation')
+  await migrateLegacyCredentials().catch(() => {})
   registerPtyIpc(ptyManager)
   registerClaudeIpc()
   registerSessionIpc(sessionManager)

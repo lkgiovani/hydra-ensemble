@@ -98,14 +98,29 @@ export default function SessionPane({ session, visible }: Props) {
       void window.api.pty.write(ptyId, data)
     })
 
+    // Resize observer: debounced so a 300ms slide-in animation doesn't
+    // fire dozens of intermediate resizes; clamped so we never tell the
+    // PTY "cols=1" when the container is momentarily collapsed (which
+    // makes claude wrap one character per line).
+    let resizeTimer: ReturnType<typeof setTimeout> | null = null
     const ro = new ResizeObserver(() => {
-      fitSafely()
-      void window.api.pty.resize(ptyId, term.cols, term.rows)
+      const w = container.clientWidth
+      const h = container.clientHeight
+      // Skip while hidden or not laid out yet.
+      if (w < 100 || h < 50) return
+      if (resizeTimer) clearTimeout(resizeTimer)
+      resizeTimer = setTimeout(() => {
+        fitSafely()
+        const cols = Math.max(20, term.cols)
+        const rows = Math.max(5, term.rows)
+        void window.api.pty.resize(ptyId, cols, rows)
+      }, 80)
     })
     ro.observe(container)
 
     return () => {
       clearTimeout(startTimeout)
+      if (resizeTimer) clearTimeout(resizeTimer)
       ro.disconnect()
       offData()
       offExit()
@@ -120,18 +135,27 @@ export default function SessionPane({ session, visible }: Props) {
   }, [session.ptyId])
 
   // Re-fit when this pane becomes visible (it may have been hidden).
+  // The container's clientWidth is briefly 0 right after display:block
+  // flips, so wait a frame before fitting to get a real measurement.
   useEffect(() => {
     if (!visible) return
-    const fit = fitRef.current
-    const term = termRef.current
-    if (!fit || !term) return
-    try {
-      fit.fit()
-      void window.api.pty.resize(session.ptyId, term.cols, term.rows)
-      term.focus()
-    } catch {
-      // noop
-    }
+    const id = requestAnimationFrame(() => {
+      const fit = fitRef.current
+      const term = termRef.current
+      const container = containerRef.current
+      if (!fit || !term || !container) return
+      if (container.clientWidth < 100 || container.clientHeight < 50) return
+      try {
+        fit.fit()
+        const cols = Math.max(20, term.cols)
+        const rows = Math.max(5, term.rows)
+        void window.api.pty.resize(session.ptyId, cols, rows)
+        term.focus()
+      } catch {
+        // noop
+      }
+    })
+    return () => cancelAnimationFrame(id)
   }, [visible, session.ptyId])
 
   const restart = async (): Promise<void> => {

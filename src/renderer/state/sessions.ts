@@ -6,6 +6,10 @@ import type {
   SessionState
 } from '../../shared/types'
 import { useToasts } from './toasts'
+import { AGENT_COLORS, NFT_AVATAR_URLS } from '../lib/agent'
+
+const pickRandom = <T,>(arr: readonly T[]): T | undefined =>
+  arr[Math.floor(Math.random() * arr.length)]
 
 interface SessionsState {
   sessions: SessionMeta[]
@@ -50,6 +54,11 @@ export const useSessions = create<SessionsState>((set, get) => ({
       const res = await window.api.session.create({
         cols: 120,
         rows: 30,
+        // Fresh sessions get a random NFT avatar + random accent colour so
+        // each agent is visually distinctive from birth. User can still
+        // override via the edit dialog.
+        avatar: pickRandom(NFT_AVATAR_URLS),
+        accentColor: pickRandom(AGENT_COLORS),
         ...opts
       })
       if (!res.ok) {

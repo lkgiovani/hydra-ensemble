@@ -1,14 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { X, Check, Shuffle, Smile, Sparkles } from 'lucide-react'
+import { X, Check, Shuffle } from 'lucide-react'
 import type { SessionMeta } from '../../shared/types'
 import {
   AGENT_COLORS,
-  AGENT_EMOJIS,
-  NFT_APE_URLS,
+  NFT_AVATAR_URLS,
+  defaultAgentAvatar,
   defaultAgentColor,
-  defaultAgentEmoji,
-  hexAlpha,
-  isAvatarUrl
+  hexAlpha
 } from '../lib/agent'
 import AgentAvatar from './AgentAvatar'
 
@@ -27,7 +25,7 @@ export default function AgentEditDialog({ session, onClose }: Props) {
   useEffect(() => {
     if (!session) return
     setName(session.name)
-    setAvatar(session.avatar || defaultAgentEmoji(session.id))
+    setAvatar(session.avatar || defaultAgentAvatar(session.id))
     setAccentColor(session.accentColor || defaultAgentColor(session.id))
     setDescription(session.description ?? '')
     requestAnimationFrame(() => inputRef.current?.focus())
@@ -55,7 +53,7 @@ export default function AgentEditDialog({ session, onClose }: Props) {
 
   const reroll = (): void => {
     const seed = `${session.id}-${Date.now()}`
-    setAvatar(defaultAgentEmoji(seed))
+    setAvatar(defaultAgentAvatar(seed))
     setAccentColor(defaultAgentColor(seed))
   }
 
@@ -199,98 +197,42 @@ function AvatarPicker({
   avatar: string
   onPick: (next: string) => void
 }) {
-  const initialTab: 'nft' | 'emoji' = isAvatarUrl(avatar) ? 'nft' : 'emoji'
-  const [tab, setTab] = useState<'nft' | 'emoji'>(initialTab)
-
   return (
     <div>
       <div className="mb-1.5 flex items-center justify-between">
         <label className="df-label">avatar</label>
-        <div className="flex items-center gap-0.5 rounded-sm border border-border-soft bg-bg-1 p-0.5">
-          <TabBtn active={tab === 'nft'} onClick={() => setTab('nft')} icon={<Sparkles size={11} />}>
-            NFT
-          </TabBtn>
-          <TabBtn active={tab === 'emoji'} onClick={() => setTab('emoji')} icon={<Smile size={11} />}>
-            emoji
-          </TabBtn>
-        </div>
+        <span className="font-mono text-[10px] text-text-4">
+          {NFT_AVATAR_URLS.length} characters
+        </span>
       </div>
-
-      {tab === 'nft' ? (
-        <div className="grid max-h-48 grid-cols-9 gap-1 overflow-y-auto rounded-sm border border-border-soft bg-bg-1 p-1.5 df-scroll">
-          {NFT_APE_URLS.map((url) => {
-            const selected = avatar === url
-            return (
-              <button
-                key={url}
-                type="button"
-                onClick={() => onPick(url)}
-                className={`flex h-9 w-9 items-center justify-center overflow-hidden rounded-sm transition ${
-                  selected
-                    ? 'ring-2 ring-inset ring-accent-500'
-                    : 'opacity-80 hover:opacity-100 ring-1 ring-inset ring-border-soft'
-                }`}
-                aria-label={`nft avatar ${url}`}
-                title={url}
-              >
-                <img
-                  src={url}
-                  alt=""
-                  loading="lazy"
-                  width={36}
-                  height={36}
-                  style={{ width: 36, height: 36, objectFit: 'cover' }}
-                />
-              </button>
-            )
-          })}
-        </div>
-      ) : (
-        <div className="grid grid-cols-10 gap-1 rounded-sm border border-border-soft bg-bg-1 p-1.5">
-          {AGENT_EMOJIS.map((e) => (
+      <div className="df-scroll grid max-h-56 grid-cols-9 gap-1 overflow-y-auto rounded-sm border border-border-soft bg-bg-1 p-1.5">
+        {NFT_AVATAR_URLS.map((url) => {
+          const selected = avatar === url
+          return (
             <button
-              key={e}
+              key={url}
               type="button"
-              onClick={() => onPick(e)}
-              className={`flex h-7 w-7 items-center justify-center rounded-sm text-base transition ${
-                avatar === e
-                  ? 'bg-accent-500/20 ring-1 ring-inset ring-accent-500'
-                  : 'hover:bg-bg-3'
+              onClick={() => onPick(url)}
+              className={`flex h-9 w-9 items-center justify-center overflow-hidden rounded-sm transition ${
+                selected
+                  ? 'ring-2 ring-inset ring-accent-500'
+                  : 'opacity-80 hover:opacity-100 ring-1 ring-inset ring-border-soft'
               }`}
-              aria-label={`avatar ${e}`}
+              aria-label={`nft avatar ${url}`}
+              title={url}
             >
-              {e}
+              <img
+                src={url}
+                alt=""
+                loading="lazy"
+                width={36}
+                height={36}
+                style={{ width: 36, height: 36, objectFit: 'cover' }}
+              />
             </button>
-          ))}
-        </div>
-      )}
+          )
+        })}
+      </div>
     </div>
-  )
-}
-
-function TabBtn({
-  active,
-  onClick,
-  icon,
-  children
-}: {
-  active: boolean
-  onClick: () => void
-  icon?: React.ReactNode
-  children: React.ReactNode
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[10px] uppercase tracking-wider transition ${
-        active
-          ? 'bg-accent-500/20 text-accent-200'
-          : 'text-text-4 hover:text-text-1'
-      }`}
-    >
-      {icon}
-      {children}
-    </button>
   )
 }

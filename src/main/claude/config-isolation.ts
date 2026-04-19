@@ -1,4 +1,5 @@
-import { mkdir, writeFile, rm } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { mkdir, writeFile, rm, readdir, lstat, copyFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -79,4 +80,67 @@ export function getSessionsRoot(): string {
 
 export function getHostClaudeDir(): string {
   return HOST_CLAUDE
+}
+
+/**
+ * One-time migration for users who logged in under the legacy per-session
+ * shadow directory (~/.hydra-ensemble/sessions/<id>/claude/.credentials.json).
+ * Those credentials were invisible to new sessions once we switched to
+ * sharing the host ~/.claude. Walk the shadow dirs, pick the most recently
+ * written credentials file, and copy it to the host.
+ *
+ * Safe to call on every boot — returns immediately if the host already
+ * has a regular (non-symlink) credentials file.
+ */
+export async function migrateLegacyCredentials(): Promise<void> {
+  const hostCreds = join(HOST_CLAUDE, '.credentials.json')
+
+  // If host already has a real creds file, nothing to do.
+  if (existsSync(hostCreds)) {
+    try {
+      const st = await lstat(hostCreds)
+      if (!st.isSymbolicLink() && st.size > 0) return
+      // If it's a lingering symlink from the old shadow setup, remove it.
+      if (st.isSymbolicLink()) await rm(hostCreds).catch(() => {})
+    } catch {
+      /* proceed with migration */
+    }
+  }
+
+  if (!existsSync(SESSIONS_ROOT)) return
+
+  let dirs: string[]
+  try {
+    dirs = await readdir(SESSIONS_ROOT)
+  } catch {
+    return
+  }
+
+  let newest: { path: string; mtime: number } | null = null
+  for (const d of dirs) {
+    const credPath = join(SESSIONS_ROOT, d, 'claude', '.credentials.json')
+    if (!existsSync(credPath)) continue
+    try {
+      const st = await lstat(credPath)
+      if (st.isSymbolicLink()) continue
+      if (st.size <= 0) continue
+      if (!newest || st.mtimeMs > newest.mtime) {
+        newest = { path: credPath, mtime: st.mtimeMs }
+      }
+    } catch {
+      /* skip */
+    }
+  }
+
+  if (!newest) return
+
+  await mkdir(HOST_CLAUDE, { recursive: true })
+  try {
+    await copyFile(newest.path, hostCreds)
+    // eslint-disable-next-line no-console
+    console.log('[credentials] migrated from', newest.path, '->', hostCreds)
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[credentials] migrate failed:', (err as Error).message)
+  }
 }
