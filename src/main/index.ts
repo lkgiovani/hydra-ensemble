@@ -27,35 +27,76 @@ import { initStore } from './store'
 import { initUpdater } from './updater'
 import type { JsonlUpdate, SessionState } from '../shared/types'
 
-const ptyManager = new PtyManager()
-const analyzerManager = new AnalyzerManager()
-const jsonlManager = new JsonlManager()
-const worktreeService = new WorktreeService()
-const projectService = new ProjectService()
-const toolkitService = new ToolkitService()
-const notificationService = new NotificationService()
-const editorFs = new EditorFs()
-const ghService = new GhService()
+// --- services ------------------------------------------------------------
+// These are filled in inside app.whenReady *after* initStore() runs, because
+// SessionManager's constructor reads getStore().sessions to rehydrate the
+// persisted session list. If we instantiated at module load the store
+// cache would still be the empty default and every persisted session
+// would be silently dropped on boot.
+let ptyManager!: PtyManager
+let analyzerManager!: AnalyzerManager
+let jsonlManager!: JsonlManager
+let sessionManager!: SessionManager
+let worktreeService!: WorktreeService
+let projectService!: ProjectService
+let toolkitService!: ToolkitService
+let notificationService!: NotificationService
+let editorFs!: EditorFs
+let ghService!: GhService
+let watchdogService!: WatchdogService
+let quickTermService!: QuickTermService
 
-const watchdogService = new WatchdogService({
-  onAction: (a) => {
-    if (a.kind === 'sendInput') {
-      ptyManager.write(a.sessionId, a.data ?? '')
-    } else if (a.kind === 'kill') {
-      void sessionManager?.destroy(a.sessionId)
+function setupServices(): void {
+  ptyManager = new PtyManager()
+  analyzerManager = new AnalyzerManager()
+  jsonlManager = new JsonlManager()
+  worktreeService = new WorktreeService()
+  projectService = new ProjectService()
+  toolkitService = new ToolkitService()
+  notificationService = new NotificationService()
+  editorFs = new EditorFs()
+  ghService = new GhService()
+
+  watchdogService = new WatchdogService({
+    onAction: (a) => {
+      if (a.kind === 'sendInput') {
+        ptyManager.write(a.sessionId, a.data ?? '')
+      } else if (a.kind === 'kill') {
+        void sessionManager.destroy(a.sessionId)
+      }
     }
+  })
+
+  sessionManager = new SessionManager({
+    pty: ptyManager,
+    analyzer: analyzerManager,
+    jsonl: jsonlManager,
+    onSessionData: (sessionId, data) => watchdogService.feed(sessionId, data),
+    onSessionDestroyed: (sessionId) => watchdogService.forgetSession(sessionId)
+  })
+
+  quickTermService = new QuickTermService(ptyManager)
+
+  // Bridge analyzer state events to update the SessionMeta cache so the
+  // renderer sees live state changes via the `session:changed` broadcast
+  // in addition to the direct `session:state` event.
+  analyzerManager.onAnyStateChange = (sessionId: string, state: SessionState) => {
+    sessionManager.patchLive(sessionId, { state })
   }
-})
 
-const sessionManager: SessionManager = new SessionManager({
-  pty: ptyManager,
-  analyzer: analyzerManager,
-  jsonl: jsonlManager,
-  onSessionData: (sessionId, data) => watchdogService.feed(sessionId, data),
-  onSessionDestroyed: (sessionId) => watchdogService.forgetSession(sessionId)
-})
-
-const quickTermService = new QuickTermService(ptyManager)
+  // Bridge jsonl updates likewise.
+  jsonlManager.onAnyUpdate = (update: JsonlUpdate) => {
+    sessionManager.patchLive(update.sessionId, {
+      cost: update.cost,
+      tokensIn: update.tokensIn,
+      tokensOut: update.tokensOut,
+      model: update.model,
+      latestAssistantText: update.latestAssistantText,
+      subStatus: update.subStatus,
+      subTarget: update.subTarget
+    })
+  }
+}
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -100,13 +141,6 @@ function createWindow(): BrowserWindow {
   projectService.attachWindow(win)
   watchdogService.attachWindow(win)
 
-  // Mirror analyzer state changes onto the persisted session metadata.
-  // The renderer also receives `session:state` directly; this keeps the
-  // sessions list in sync for next paint.
-  win.webContents.on('ipc-message', () => {
-    /* no-op placeholder */
-  })
-
   if (process.env['ELECTRON_RENDERER_URL']) {
     void win.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
@@ -114,24 +148,6 @@ function createWindow(): BrowserWindow {
   }
 
   return win
-}
-
-// Bridge analyzer state events to update the SessionMeta cache.
-analyzerManager.onAnyStateChange = (sessionId: string, state: SessionState) => {
-  sessionManager.patchLive(sessionId, { state })
-}
-
-// Bridge jsonl updates likewise.
-jsonlManager.onAnyUpdate = (update: JsonlUpdate) => {
-  sessionManager.patchLive(update.sessionId, {
-    cost: update.cost,
-    tokensIn: update.tokensIn,
-    tokensOut: update.tokensOut,
-    model: update.model,
-    latestAssistantText: update.latestAssistantText,
-    subStatus: update.subStatus,
-    subTarget: update.subTarget
-  })
 }
 
 // Window-control IPC so the renderer can wire the custom titlebar
@@ -158,19 +174,24 @@ function registerWindowIpc(): void {
 }
 
 app.whenReady().then(async () => {
-  // Nuke the application-wide menu on Linux/Windows so child windows
-  // never inherit a stray File/Edit/View/Window/Help bar. On macOS we
-  // leave Electron's default menu intact because the OS top bar needs
-  // an app menu to show the standard Cmd+Q / About / Hide entries.
   if (process.platform !== 'darwin') {
     Menu.setApplicationMenu(null)
   }
-  registerWindowIpc()
+
+  // Order matters: initStore populates the JSON cache from userData/store.json
+  // BEFORE SessionManager's constructor reads getStore().sessions for
+  // rehydration. Used to be reversed, so every boot started with an
+  // empty session list.
   initStore()
+
   // One-time migrate host ~/.claude/.credentials.json from any legacy
   // shadow dir so login persists across newly-spawned sessions.
   const { migrateLegacyCredentials } = await import('./claude/config-isolation')
   await migrateLegacyCredentials().catch(() => {})
+
+  setupServices()
+
+  registerWindowIpc()
   registerPtyIpc(ptyManager)
   registerClaudeIpc()
   registerSessionIpc(sessionManager)
@@ -182,6 +203,7 @@ app.whenReady().then(async () => {
   registerEditorIpc(editorFs)
   registerGhIpc(ghService)
   registerQuickTermIpc(quickTermService)
+
   const win = createWindow()
   initUpdater(win)
 
@@ -202,16 +224,16 @@ app.whenReady().then(async () => {
 // On close, kill PTYs but preserve the per-session CLAUDE_CONFIG_DIR so
 // sessions can be rehydrated on the next launch (history + credentials).
 app.on('window-all-closed', () => {
-  sessionManager.shutdown()
-  jsonlManager.stopAll()
-  analyzerManager.disposeAll()
-  ptyManager.killAll()
+  sessionManager?.shutdown()
+  jsonlManager?.stopAll()
+  analyzerManager?.disposeAll()
+  ptyManager?.killAll()
   if (process.platform !== 'darwin') app.quit()
 })
 
 app.on('before-quit', () => {
-  sessionManager.shutdown()
-  jsonlManager.stopAll()
-  analyzerManager.disposeAll()
-  ptyManager.killAll()
+  sessionManager?.shutdown()
+  jsonlManager?.stopAll()
+  analyzerManager?.disposeAll()
+  ptyManager?.killAll()
 })
