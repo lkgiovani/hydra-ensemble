@@ -5,6 +5,7 @@ import {
   GitPullRequest,
   HelpCircle,
   LayoutDashboard,
+  Terminal as TerminalIcon,
   Wand2
 } from 'lucide-react'
 import SessionPane from './components/SessionPane'
@@ -24,6 +25,7 @@ import Toasts from './components/Toasts'
 import CommandPalette from './components/CommandPalette'
 import HelpOverlay from './components/HelpOverlay'
 import NewSessionDialog from './components/NewSessionDialog'
+import TerminalsPanel from './components/TerminalsPanel'
 import WindowControls from './components/WindowControls'
 import { useSpawnDialog } from './state/spawn'
 import { useSlidePanel } from './state/panels'
@@ -165,7 +167,7 @@ export default function App() {
       }
       if (e.key === '`' && !e.shiftKey) {
         e.preventDefault()
-        void window.api.quickTerm.toggle()
+        togglePanelFor('terminals')
         return
       }
       if (key === 'p' && e.shiftKey) {
@@ -291,6 +293,13 @@ export default function App() {
               onClick={() => togglePanelFor('dashboard')}
             />
             <HeaderButton
+              icon={<TerminalIcon size={13} strokeWidth={1.75} />}
+              label="terminals"
+              shortcut={`${fmtShortcut('').slice(0, -1)}\``}
+              active={activePanel === 'terminals'}
+              onClick={() => togglePanelFor('terminals')}
+            />
+            <HeaderButton
               icon={<HelpCircle size={13} strokeWidth={1.75} />}
               label="?"
               shortcut="?"
@@ -388,6 +397,7 @@ export default function App() {
                 }}
                 mode="inline"
               />
+              <TerminalsPanel open={activePanel === 'terminals'} onClose={closePanel} />
             </div>
           </div>
 

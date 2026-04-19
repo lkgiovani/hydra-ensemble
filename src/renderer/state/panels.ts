@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type PanelKind = 'editor' | 'dashboard' | 'watchdogs' | 'pr'
+export type PanelKind = 'editor' | 'dashboard' | 'watchdogs' | 'pr' | 'terminals'
 
 interface SlidePanelState {
   current: PanelKind | null
