@@ -84,14 +84,14 @@ export default function SessionStatePill({ state, label = true }: Props) {
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ring-1 ring-inset ${style.bg} ${style.text} ${style.ring}`}
+      className={`inline-flex items-center gap-1.5 rounded-sm px-1.5 py-0.5 font-mono text-[10px] tracking-tight ${style.text}`}
       title={style.label}
     >
       <span
         className={`h-1.5 w-1.5 rounded-full ${style.dot} ${style.pulse ? 'df-pulse' : ''}`}
         aria-hidden
       />
-      <span>{style.label}</span>
+      <span className="lowercase">{style.label}</span>
     </span>
   )
 }

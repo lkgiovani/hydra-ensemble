@@ -6,14 +6,56 @@ import { getStore, patchStore } from '../store'
 import type { ToolkitItem, ToolkitRunResult } from '../../shared/types'
 
 const DEFAULT_TOOLKIT: ToolkitItem[] = [
-  { id: 'test', label: 'Test', command: 'npm test', icon: 'beaker', group: 'verify' },
-  { id: 'build', label: 'Build', command: 'npm run build', icon: 'hammer', group: 'verify' },
-  { id: 'lint', label: 'Lint', command: 'npm run lint', icon: 'wand', group: 'verify' },
-  { id: 'typecheck', label: 'Typecheck', command: 'npm run typecheck', icon: 'fileCheck', group: 'verify' },
-  { id: 'install', label: 'Install', command: 'npm install', icon: 'package', group: 'deps' },
-  { id: 'dev', label: 'Dev server', command: 'npm run dev', icon: 'play', group: 'run' },
-  { id: 'commit-push', label: 'Commit & Push', command: 'git add -A && git commit -m "wip" && git push', icon: 'send', group: 'git' },
-  { id: 'status', label: 'Git status', command: 'git status', icon: 'gitBranch', group: 'git' }
+  // verify — npm scripts run identically on Linux/macOS/Windows
+  { id: 'test', label: 'test', command: 'npm test', icon: 'beaker', group: 'verify' },
+  { id: 'build', label: 'build', command: 'npm run build', icon: 'hammer', group: 'verify' },
+  { id: 'lint', label: 'lint', command: 'npm run lint', icon: 'wand', group: 'verify' },
+  { id: 'typecheck', label: 'typecheck', command: 'npm run typecheck', icon: 'fileCheck', group: 'verify' },
+  // deps
+  { id: 'install', label: 'install', command: 'npm install', icon: 'package', group: 'deps' },
+  // run
+  { id: 'dev', label: 'dev', command: 'npm run dev', icon: 'play', group: 'run' },
+  // git — bash-style && works in cmd.exe /c too, but we provide explicit wins
+  {
+    id: 'status',
+    label: 'status',
+    command: 'git status -sb',
+    icon: 'gitBranch',
+    group: 'git'
+  },
+  {
+    id: 'diff',
+    label: 'diff',
+    command: 'git diff --stat',
+    icon: 'gitMerge',
+    group: 'git'
+  },
+  {
+    id: 'commit-push',
+    label: 'commit & push',
+    command: 'git add -A && git commit -m "wip" && git push',
+    commandWin: 'git add -A && git commit -m "wip" && git push',
+    icon: 'send',
+    group: 'git'
+  },
+  // shell — OS-divergent helpers
+  {
+    id: 'open-folder',
+    label: 'open folder',
+    command: 'xdg-open .',
+    commandMac: 'open .',
+    commandWin: 'explorer .',
+    icon: 'eye',
+    group: 'shell'
+  },
+  {
+    id: 'list',
+    label: 'list',
+    command: 'ls -lah',
+    commandWin: 'dir /a',
+    icon: 'fileSearch',
+    group: 'shell'
+  }
 ]
 
 const RUN_TIMEOUT_MS = 30_000
@@ -55,7 +97,8 @@ export class ToolkitService {
     const workingDir =
       cwd && isAbsolute(cwd) && existsSync(cwd) ? cwd : homedir()
 
-    const { shell, args } = buildShellInvocation(item.command)
+    const command = pickCommand(item)
+    const { shell, args } = buildShellInvocation(command)
 
     return await new Promise<ToolkitRunResult>((resolve) => {
       let stdout = ''
@@ -125,4 +168,15 @@ function buildShellInvocation(command: string): { shell: string; args: string[] 
   }
   const shell = process.env['SHELL'] ?? '/bin/bash'
   return { shell, args: ['-lc', command] }
+}
+
+/**
+ * Choose the most specific command for the host OS.
+ * Order: commandWin/Mac/Linux when the platform matches, else default.
+ */
+function pickCommand(item: ToolkitItem): string {
+  if (process.platform === 'win32' && item.commandWin) return item.commandWin
+  if (process.platform === 'darwin' && item.commandMac) return item.commandMac
+  if (process.platform === 'linux' && item.commandLinux) return item.commandLinux
+  return item.command
 }

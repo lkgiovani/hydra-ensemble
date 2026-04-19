@@ -18,6 +18,7 @@ function relativeAge(iso: string): string {
   const now = Date.now()
   const then = new Date(iso).getTime()
   const sec = Math.max(0, Math.floor((now - then) / 1000))
+  if (sec < 5) return 'now'
   if (sec < 60) return `${sec}s`
   const min = Math.floor(sec / 60)
   if (min < 60) return `${min}m`
@@ -28,14 +29,9 @@ function relativeAge(iso: string): string {
 }
 
 function formatCost(c: number | undefined): string {
-  if (!c || c <= 0) return '<$0.01'
-  if (c < 0.01) return '<$0.01'
+  if (!c || c <= 0) return '—'
+  if (c < 0.01) return '<$.01'
   return `$${c.toFixed(2)}`
-}
-
-function shortModel(m: string | undefined): string {
-  if (!m) return '—'
-  return m
 }
 
 export default function SessionCard({
@@ -48,6 +44,17 @@ export default function SessionCard({
   onEdit
 }: Props) {
   const accent = session.accentColor || defaultAgentColor(session.id)
+
+  // Active card uses the agent's accent for a left rule + soft tinted ring.
+  // No global df-glow-accent so the colour respects the per-agent identity
+  // (previous coral hardcoded glow looked broken on a violet/purple agent).
+  const cardStyle: React.CSSProperties = {
+    borderRadius: 'var(--radius-md)',
+    boxShadow: active
+      ? `inset 3px 0 0 0 ${accent}, 0 0 0 1px ${hexAlpha(accent, 0.28)}`
+      : undefined
+  }
+
   return (
     <div
       onClick={onClick}
@@ -55,62 +62,66 @@ export default function SessionCard({
         e.preventDefault()
         onEdit?.()
       }}
-      className={`group relative cursor-pointer overflow-hidden border bg-bg-3 px-2.5 py-2 transition-all df-lift ${
-        active ? 'border-transparent bg-bg-4 df-glow-accent' : 'border-border-soft hover:border-border-mid hover:bg-bg-4'
+      style={cardStyle}
+      className={`group relative cursor-pointer overflow-hidden border bg-bg-3 px-2.5 py-2 font-mono transition-[background,border,transform] duration-150 ease-out active:translate-y-px active:bg-bg-5 ${
+        active
+          ? 'border-transparent bg-bg-4'
+          : 'border-border-soft hover:-translate-y-px hover:border-border-mid hover:bg-bg-4'
       }`}
-      style={{
-        borderRadius: 'var(--radius-md)',
-        ...(active ? { boxShadow: `inset 3px 0 0 0 ${accent}, 0 0 0 1px ${hexAlpha(accent, 0.35)}` } : {})
-      }}
     >
       {/* row 1: avatar + name + index */}
       <div className="flex items-start gap-2.5">
-        <AgentAvatar session={session} size={30} />
+        <AgentAvatar session={session} size={28} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
             <span className="truncate text-[13px] font-semibold tracking-tight text-text-1">
               {session.name}
             </span>
             {index <= 9 ? (
-              <span className="shrink-0 rounded-sm border border-border-soft bg-bg-2 px-1.5 py-0.5 font-mono text-[10px] text-text-4">
+              <span className="shrink-0 rounded-sm border border-border-soft bg-bg-2/80 px-1 py-0 text-[10px] leading-4 text-text-4">
                 ⌘{index === 9 ? 0 : index}
               </span>
             ) : null}
           </div>
           {session.description ? (
             <div className="truncate text-[11px] italic text-text-3">{session.description}</div>
-          ) : null}
+          ) : (
+            <div className="truncate text-[10px] text-text-4">/{session.id.slice(0, 6)}</div>
+          )}
         </div>
       </div>
 
       {/* row 2: state + sub-status */}
-      <div className="mt-1.5 flex items-center gap-2">
+      <div className="mt-1.5 flex min-h-[16px] items-center gap-1.5 text-[10px]">
         <SessionStatePill state={session.state} />
         {session.subStatus ? (
-          <span className="truncate font-mono text-[10px] text-text-3">
-            {session.subStatus}
+          <span className="flex min-w-0 items-center gap-1 truncate text-text-3">
+            <span className="text-text-4">›</span>
+            <span>{session.subStatus}</span>
             {session.subTarget ? (
-              <span className="text-text-4"> · {session.subTarget}</span>
+              <span className="truncate text-text-2">{session.subTarget}</span>
             ) : null}
           </span>
         ) : null}
       </div>
 
       {/* row 3: meta */}
-      <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px]">
-        <div className="flex min-w-0 items-center gap-1.5 text-text-3">
+      <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-text-4">
+        <div className="flex min-w-0 items-center gap-1.5">
           {session.branch ? (
-            <span className="flex min-w-0 items-center gap-1">
-              <GitBranch size={10} strokeWidth={1.75} className="shrink-0 text-text-4" />
-              <span className="truncate font-mono">{session.branch}</span>
+            <span className="flex min-w-0 items-center gap-1 text-text-3">
+              <GitBranch size={9} strokeWidth={1.75} className="shrink-0 text-text-4" />
+              <span className="truncate">{session.branch}</span>
             </span>
-          ) : (
-            <span className="text-text-4">no branch</span>
-          )}
-          <span className="text-text-4">·</span>
-          <span className="font-mono text-text-3">{shortModel(session.model)}</span>
+          ) : null}
+          {session.model ? (
+            <>
+              {session.branch ? <span>·</span> : null}
+              <span className="text-text-3">{session.model}</span>
+            </>
+          ) : null}
         </div>
-        <div className="flex shrink-0 items-center gap-1.5 font-mono text-text-4">
+        <div className="flex shrink-0 items-center gap-1.5 tabular-nums">
           <span
             className={session.cost && session.cost > 0 ? 'text-status-generating' : 'text-text-4'}
           >
@@ -124,46 +135,42 @@ export default function SessionCard({
       {/* hover actions */}
       <div className="absolute right-1 top-1 flex gap-0.5 opacity-0 transition group-hover:opacity-100">
         {onEdit ? (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              onEdit()
-            }}
-            className="rounded-sm bg-bg-1/90 p-1 text-text-3 hover:bg-bg-5 hover:text-text-1"
-            title="edit agent"
-            aria-label="edit agent"
-          >
-            <Edit3 size={11} strokeWidth={1.75} />
-          </button>
+          <ActionBtn onClick={onEdit} title="edit agent" Icon={Edit3} />
         ) : null}
         {onRestart ? (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              onRestart()
-            }}
-            className="rounded-sm bg-bg-1/90 p-1 text-text-3 hover:bg-bg-5 hover:text-text-1"
-            title="restart"
-            aria-label="restart"
-          >
-            <RotateCw size={11} strokeWidth={1.75} />
-          </button>
+          <ActionBtn onClick={onRestart} title="restart" Icon={RotateCw} />
         ) : null}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            onDestroy()
-          }}
-          className="rounded-sm bg-bg-1/90 p-1 text-text-3 hover:bg-status-attention/20 hover:text-status-attention"
-          title="close"
-          aria-label="close"
-        >
-          <X size={11} strokeWidth={1.75} />
-        </button>
+        <ActionBtn onClick={onDestroy} title="close" Icon={X} danger />
       </div>
     </div>
+  )
+}
+
+function ActionBtn({
+  onClick,
+  title,
+  Icon,
+  danger
+}: {
+  onClick: () => void
+  title: string
+  Icon: typeof X
+  danger?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation()
+        onClick()
+      }}
+      className={`rounded-sm bg-bg-1/85 p-1 text-text-3 transition hover:bg-bg-5 ${
+        danger ? 'hover:text-status-attention' : 'hover:text-text-1'
+      }`}
+      title={title}
+      aria-label={title}
+    >
+      <Icon size={11} strokeWidth={1.75} />
+    </button>
   )
 }

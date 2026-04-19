@@ -68,13 +68,23 @@ html, body, #root {
   height: 100%;
   width: 100%;
   overflow: hidden;
-  font-family: var(--font-sans);
+  /* Mono-first chrome: every label, button, pill, status, branch, model
+     reads as a CLI by default. Sans is reserved for hero / display copy. */
+  font-family: var(--font-mono);
   background: var(--color-bg-0);
   color: var(--color-text-1);
-  font-feature-settings: "cv11", "ss01", "ss03";
+  font-feature-settings: "ss01", "ss02", "calt", "zero";
+  font-variant-ligatures: none;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  letter-spacing: -0.005em;
+  letter-spacing: 0;
+}
+
+/* Use Inter only where explicitly requested via .font-display or
+   the `font-display` Tailwind utility — i.e. hero h1, big numbers. */
+.font-display, [class*="font-display"] {
+  font-family: var(--font-display) !important;
+  letter-spacing: -0.01em;
 }
 
 /* Monospace body for data-heavy surfaces — applied via class .df-mono-surface */
@@ -179,6 +189,15 @@ select:focus-visible {
 .df-pulse    { animation: df-pulse 1.6s ease-in-out infinite; }
 .df-fade-in  { animation: df-fade-in 0.18s ease-out both; }
 .df-slide-in { animation: df-slide-in-right 0.22s ease-out both; }
+
+/* CLI bracket utility: wraps content in [ ] in the muted text colour */
+.df-bracket::before { content: "["; color: var(--color-text-4); margin-right: 1px; }
+.df-bracket::after  { content: "]"; color: var(--color-text-4); margin-left: 1px; }
+
+/* CLI prompt prefix — places a coloured "$" or ">" before content */
+.df-prompt-dollar::before { content: "$ "; color: var(--color-accent-500); }
+.df-prompt-arrow::before  { content: "› "; color: var(--color-accent-400); }
+.df-prompt-pound::before  { content: "# "; color: var(--color-text-4); }
 
 .df-lift {
   transition: transform 0.12s ease, background-color 0.12s ease, border-color 0.12s ease;

@@ -140,7 +140,14 @@ export interface ProjectMeta {
 export interface ToolkitItem {
   id: string
   label: string
+  /** Default command. Used on Linux + macOS, and as the fallback on Windows. */
   command: string
+  /** Optional override when running on Windows (cmd.exe semantics). */
+  commandWin?: string
+  /** Optional override when running on macOS. */
+  commandMac?: string
+  /** Optional override when running on Linux. */
+  commandLinux?: string
   /** Name from the curated lucide icon set (see renderer/lib/toolkit-icons). */
   icon?: string
   /** Optional accent colour (hex) used for hover ring and run state. */
