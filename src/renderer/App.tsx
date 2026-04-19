@@ -22,7 +22,9 @@ import Toasts from './components/Toasts'
 import CommandPalette from './components/CommandPalette'
 import HelpOverlay from './components/HelpOverlay'
 import NewSessionDialog from './components/NewSessionDialog'
+import WindowControls from './components/WindowControls'
 import { useSpawnDialog } from './state/spawn'
+import { isMac } from './lib/platform'
 import { useSessions } from './state/sessions'
 import { useSessionsUi } from './state/sessionsExtra'
 import { useEditor } from './state/editor'
@@ -208,8 +210,16 @@ export default function App() {
 
       {/* Main column: header, terminal, status bar */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-11 shrink-0 items-center justify-between border-b border-border-soft bg-bg-2 px-3">
-          <div className="flex items-center gap-3">
+        <header
+          className={`flex h-11 shrink-0 items-center justify-between border-b border-border-soft bg-bg-2 ${
+            isMac() ? 'pl-20 pr-3' : 'pl-3 pr-0'
+          }`}
+          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+        >
+          <div
+            className="flex items-center gap-3"
+            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+          >
             <div className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-sm bg-accent-500 df-pulse" />
               <span className="flex items-baseline gap-1.5 font-mono text-sm font-semibold tracking-tight">
@@ -236,7 +246,11 @@ export default function App() {
             </button>
           </div>
 
-          <div className="flex items-center gap-0.5">
+          <div
+            className="flex items-stretch"
+            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+          >
+            <div className="flex items-center gap-0.5 pr-2">
             <HeaderButton
               icon={<GitPullRequest size={13} strokeWidth={1.75} />}
               label="PRs"
@@ -283,6 +297,8 @@ export default function App() {
                     : 'ok'}
               </span>
             </div>
+            </div>
+            <WindowControls />
           </div>
         </header>
 

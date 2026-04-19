@@ -108,6 +108,12 @@ const api: HydraEnsembleApi = {
   quickTerm: {
     toggle: () => ipcRenderer.invoke('quickTerm:toggle')
   },
+  window: {
+    minimize: () => ipcRenderer.invoke('window:minimize'),
+    maximizeToggle: () => ipcRenderer.invoke('window:maximizeToggle'),
+    close: () => ipcRenderer.invoke('window:close'),
+    isMaximized: () => ipcRenderer.invoke('window:isMaximized')
+  },
   platform: {
     os: process.platform as Platform
   }

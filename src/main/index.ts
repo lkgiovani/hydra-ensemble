@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, shell } from 'electron'
+import { app, BrowserWindow, Menu, ipcMain, shell } from 'electron'
 import { join } from 'node:path'
 import { PtyManager } from './pty/manager'
 import { AnalyzerManager } from './pty/analyzer-manager'
@@ -134,6 +134,29 @@ jsonlManager.onAnyUpdate = (update: JsonlUpdate) => {
   })
 }
 
+// Window-control IPC so the renderer can wire the custom titlebar
+// minimize / maximize / close buttons that replace the OS-native
+// frame on tiling WMs (Hyprland, etc.) where decorations are absent.
+function registerWindowIpc(): void {
+  const winFor = (sender: Electron.WebContents): BrowserWindow | null =>
+    BrowserWindow.fromWebContents(sender)
+
+  ipcMain.handle('window:minimize', (e) => {
+    winFor(e.sender)?.minimize()
+  })
+  ipcMain.handle('window:maximizeToggle', (e) => {
+    const w = winFor(e.sender)
+    if (!w) return false
+    if (w.isMaximized()) w.unmaximize()
+    else w.maximize()
+    return w.isMaximized()
+  })
+  ipcMain.handle('window:close', (e) => {
+    winFor(e.sender)?.close()
+  })
+  ipcMain.handle('window:isMaximized', (e) => winFor(e.sender)?.isMaximized() ?? false)
+}
+
 app.whenReady().then(async () => {
   // Nuke the application-wide menu on Linux/Windows so child windows
   // never inherit a stray File/Edit/View/Window/Help bar. On macOS we
@@ -142,6 +165,7 @@ app.whenReady().then(async () => {
   if (process.platform !== 'darwin') {
     Menu.setApplicationMenu(null)
   }
+  registerWindowIpc()
   initStore()
   // One-time migrate host ~/.claude/.credentials.json from any legacy
   // shadow dir so login persists across newly-spawned sessions.

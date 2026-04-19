@@ -322,6 +322,12 @@ export interface HydraEnsembleApi {
   quickTerm: {
     toggle: () => Promise<void>
   }
+  window: {
+    minimize: () => Promise<void>
+    maximizeToggle: () => Promise<boolean>
+    close: () => Promise<void>
+    isMaximized: () => Promise<boolean>
+  }
   platform: {
     os: Platform
   }
