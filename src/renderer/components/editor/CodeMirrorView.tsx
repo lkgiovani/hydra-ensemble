@@ -5,6 +5,7 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirro
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search'
 import { bracketMatching, indentOnInput } from '@codemirror/language'
 import { oneDark } from '@codemirror/theme-one-dark'
+import { vim, Vim } from '@replit/codemirror-vim'
 import { loadLanguageFor } from './languages'
 
 interface Props {
@@ -16,12 +17,36 @@ interface Props {
   onChange: (text: string) => void
   /** Cmd/Ctrl+S handler. */
   onSave: () => void
+  /** When true, vim modal bindings (normal / insert / visual / command) are on. */
+  vimMode?: boolean
 }
 
-export default function CodeMirrorView({ path, initial, onChange, onSave }: Props) {
+// Wire the `:w` Ex command once per module to save the active file via the
+// CodeMirrorView's onSave prop. Stored in a module-local holder so the
+// handler can pick the right callback for the currently-mounted view.
+let activeSaveHandler: (() => void) | null = null
+Vim.defineEx('w', 'w', () => {
+  activeSaveHandler?.()
+})
+Vim.defineEx('write', 'write', () => {
+  activeSaveHandler?.()
+})
+
+export default function CodeMirrorView({ path, initial, onChange, onSave, vimMode }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const langCompartment = useRef(new Compartment())
+  const vimCompartment = useRef(new Compartment())
+  const saveRef = useRef(onSave)
+
+  // keep the `:w` handler current if onSave changes between renders
+  useEffect(() => {
+    saveRef.current = onSave
+    activeSaveHandler = () => saveRef.current()
+    return () => {
+      if (activeSaveHandler === (() => saveRef.current())) activeSaveHandler = null
+    }
+  }, [onSave])
 
   // One-time editor construction. Document changes after open are pushed via
   // the second effect (path change → reset doc + language).
@@ -30,6 +55,8 @@ export default function CodeMirrorView({ path, initial, onChange, onSave }: Prop
     if (!host) return
 
     const baseExtensions: Extension[] = [
+      // Vim compartment FIRST so its keymap can override defaults when active.
+      vimCompartment.current.of(vimMode ? vim() : []),
       lineNumbers(),
       highlightActiveLine(),
       history(),
@@ -44,12 +71,17 @@ export default function CodeMirrorView({ path, initial, onChange, onSave }: Prop
         {
           key: 'Mod-s',
           run: () => {
-            onSave()
+            saveRef.current()
             return true
           }
         }
       ]),
       oneDark,
+      // Force full height so the editor is scrollable on its own.
+      EditorView.theme({
+        '&': { height: '100%' },
+        '.cm-scroller': { overflow: 'auto', fontFamily: 'inherit' }
+      }),
       langCompartment.current.of([]),
       EditorView.updateListener.of((u) => {
         if (u.docChanged) {
@@ -66,8 +98,8 @@ export default function CodeMirrorView({ path, initial, onChange, onSave }: Prop
       view.destroy()
       viewRef.current = null
     }
-    // We intentionally only construct once per mount; subsequent path/initial
-    // updates are handled by the next effect.
+    // Editor is constructed once per mount; subsequent path/vim/initial updates
+    // flow through the effects below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -93,10 +125,19 @@ export default function CodeMirrorView({ path, initial, onChange, onSave }: Prop
     }
   }, [path, initial])
 
+  // Toggle vim extension without rebuilding the editor.
+  useEffect(() => {
+    const view = viewRef.current
+    if (!view) return
+    view.dispatch({
+      effects: vimCompartment.current.reconfigure(vimMode ? vim() : [])
+    })
+  }, [vimMode])
+
   return (
     <div
       ref={hostRef}
-      className="df-scroll h-full w-full overflow-hidden rounded-md border border-border-soft bg-bg-1 font-mono text-sm"
+      className="df-scroll h-full w-full overflow-hidden rounded-sm border border-border-soft bg-bg-1 font-mono text-sm"
     />
   )
 }

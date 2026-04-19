@@ -1,10 +1,11 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Code2, File as FileIcon, Save, X } from 'lucide-react'
+import { Code2, Eye, File as FileIcon, Pencil, Save, Terminal as TerminalIcon, X } from 'lucide-react'
 import { useEditor } from '../state/editor'
 import { useSessions } from '../state/sessions'
 import FileTree from './editor/FileTree'
 import CodeMirrorView from './editor/CodeMirrorView'
+import MarkdownPreview from './editor/MarkdownPreview'
 import { fmtShortcut, hasMod } from '../lib/platform'
 
 interface Props {
@@ -24,6 +25,11 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
   const setActive = useEditor((s) => s.setActive)
   const updateActiveBuffer = useEditor((s) => s.updateActiveBuffer)
   const saveActive = useEditor((s) => s.saveActive)
+
+  // Vim modal bindings — persisted for the session only.
+  const [vimMode, setVimMode] = useState(false)
+  // Markdown preview flag — only relevant when the active file is .md.
+  const [previewMd, setPreviewMd] = useState(false)
 
   const activeSession = useMemo(
     () => sessions.find((s) => s.id === activeSessionId) ?? null,
@@ -49,6 +55,8 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
 
   if (!open) return null
   const activeFile = openFiles.find((f) => f.path === activeFilePath) ?? null
+  const isMarkdown = !!activeFile && /\.(md|markdown|mdx)$/i.test(activeFile.path)
+  const showPreview = isMarkdown && previewMd
 
   const body = (
     <div className="flex h-full w-full min-w-0 flex-col overflow-hidden bg-bg-2">
@@ -63,6 +71,38 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
           ) : null}
         </div>
         <div className="flex items-center gap-1">
+          {isMarkdown ? (
+            <button
+              type="button"
+              onClick={() => setPreviewMd((v) => !v)}
+              className={`flex items-center gap-1 rounded-sm border px-2 py-1 text-[11px] transition ${
+                previewMd
+                  ? 'border-accent-500/40 bg-accent-500/10 text-accent-200'
+                  : 'border-border-soft text-text-3 hover:border-border-mid hover:text-text-1'
+              }`}
+              title={previewMd ? 'switch to source' : 'render markdown preview'}
+            >
+              {previewMd ? (
+                <Pencil size={11} strokeWidth={1.75} />
+              ) : (
+                <Eye size={11} strokeWidth={1.75} />
+              )}
+              {previewMd ? 'source' : 'preview'}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => setVimMode((v) => !v)}
+            className={`flex items-center gap-1 rounded-sm border px-2 py-1 font-mono text-[11px] transition ${
+              vimMode
+                ? 'border-status-generating/40 bg-status-generating/10 text-status-generating'
+                : 'border-border-soft text-text-3 hover:border-border-mid hover:text-text-1'
+            }`}
+            title={vimMode ? 'disable vim bindings' : 'enable vim bindings (hjkl / i / :w / etc)'}
+          >
+            <TerminalIcon size={11} strokeWidth={1.75} />
+            vim {vimMode ? 'on' : 'off'}
+          </button>
           <button
             type="button"
             onClick={() => void saveActive()}
@@ -139,13 +179,18 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
           </div>
           <div className="min-h-0 flex-1 overflow-hidden bg-bg-1 p-2">
             {activeFile && activeFile.encoding === 'utf-8' ? (
-              <CodeMirrorView
-                key={activeFile.path}
-                path={activeFile.path}
-                initial={activeFile.bytes}
-                onChange={(text) => updateActiveBuffer(text)}
-                onSave={() => void saveActive()}
-              />
+              showPreview ? (
+                <MarkdownPreview markdown={activeFile.bytes} />
+              ) : (
+                <CodeMirrorView
+                  key={activeFile.path}
+                  path={activeFile.path}
+                  initial={activeFile.bytes}
+                  onChange={(text) => updateActiveBuffer(text)}
+                  onSave={() => void saveActive()}
+                  vimMode={vimMode}
+                />
+              )
             ) : activeFile ? (
               <div className="flex h-full flex-col items-center justify-center gap-2">
                 <FileIcon size={32} strokeWidth={1.25} className="text-text-4" />

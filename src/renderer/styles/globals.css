@@ -120,26 +120,34 @@ html, body, #root {
   padding: 12px 14px;
 }
 
-.xterm-viewport::-webkit-scrollbar,
-.df-scroll::-webkit-scrollbar {
+/* Global scrollbar theme — applies to every scrollable surface in the
+   renderer (xterm viewport, CodeMirror's .cm-scroller, .df-scroll
+   containers, native scrollbars on <div>s we didn't explicitly class).
+   Keeps the chrome visually coherent on Linux/Win (GTK/Chromium default
+   scrollbars are way too chunky and bright). */
+::-webkit-scrollbar {
   width: 10px;
   height: 10px;
   background: transparent;
 }
-
-.xterm-viewport::-webkit-scrollbar-thumb,
-.df-scroll::-webkit-scrollbar-thumb {
+::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.08);
-  border-radius: 2px;
+  border-radius: 4px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
-
-.xterm-viewport::-webkit-scrollbar-thumb:hover,
-.df-scroll::-webkit-scrollbar-thumb:hover {
+::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.18);
   background-clip: padding-box;
   border: 2px solid transparent;
+}
+::-webkit-scrollbar-corner { background: transparent; }
+
+/* Firefox falls back to this shorthand since it doesn't support
+   webkit pseudo-elements. Applied everywhere. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
 }
 
 /* ============================================================
@@ -222,3 +230,58 @@ select:focus-visible {
   background-size: auto, 24px 24px, 24px 24px;
   background-position: 0 0, -1px -1px, -1px -1px;
 }
+
+/* ============================================================
+ * Markdown preview (.df-md)
+ * Minimal github-dark-ish rendering via <article className="df-md">
+ * ============================================================ */
+.df-md h1, .df-md h2, .df-md h3, .df-md h4, .df-md h5, .df-md h6 {
+  color: var(--color-text-1);
+  font-weight: 600;
+  line-height: 1.25;
+  margin: 1.5em 0 0.6em;
+  letter-spacing: -0.01em;
+}
+.df-md h1 { font-size: 1.5rem; border-bottom: 1px solid var(--color-border-soft); padding-bottom: .3em; }
+.df-md h2 { font-size: 1.25rem; border-bottom: 1px solid var(--color-border-soft); padding-bottom: .2em; }
+.df-md h3 { font-size: 1.1rem; }
+.df-md p { margin: 0.8em 0; }
+.df-md a { color: var(--color-accent-400); text-decoration: underline; text-underline-offset: 2px; }
+.df-md a:hover { color: var(--color-accent-200); }
+.df-md code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  padding: 0.15em 0.35em;
+  background: var(--color-bg-3);
+  border-radius: 3px;
+}
+.df-md pre {
+  font-family: var(--font-mono);
+  background: var(--color-bg-3);
+  padding: 12px 14px;
+  border-radius: 4px;
+  border: 1px solid var(--color-border-soft);
+  overflow-x: auto;
+  font-size: 0.85em;
+  line-height: 1.5;
+  margin: 1em 0;
+}
+.df-md pre code { background: transparent; padding: 0; }
+.df-md ul, .df-md ol { margin: 0.6em 0; padding-left: 1.6em; }
+.df-md li { margin: 0.25em 0; }
+.df-md blockquote {
+  border-left: 3px solid var(--color-border-mid);
+  margin: 1em 0;
+  padding: 0.3em 1em;
+  color: var(--color-text-3);
+}
+.df-md hr { border: 0; border-top: 1px solid var(--color-border-soft); margin: 1.6em 0; }
+.df-md table { border-collapse: collapse; margin: 1em 0; font-size: 0.9em; }
+.df-md th, .df-md td {
+  border: 1px solid var(--color-border-soft);
+  padding: 6px 10px;
+}
+.df-md th { background: var(--color-bg-3); text-align: left; }
+.df-md img { max-width: 100%; border-radius: 3px; }
+.df-md strong { color: var(--color-text-1); font-weight: 600; }
+.df-md em { color: var(--color-text-2); }
