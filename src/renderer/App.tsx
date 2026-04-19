@@ -15,6 +15,7 @@ import PRInspector from './components/PRInspector'
 import VoiceButton from './components/VoiceButton'
 import SessionsPanel from './components/SessionsPanel'
 import ToolkitGrid from './components/ToolkitGrid'
+import ActiveAgentBar from './components/ActiveAgentBar'
 import ToolkitEditorDialog from './components/Toolkit/EditorDialog'
 import WatchdogPanel from './components/Watchdog/Panel'
 import { useSessions } from './state/sessions'
@@ -248,17 +249,20 @@ export default function App() {
           <div className="relative flex min-w-0 flex-1 flex-col bg-bg-1">
             {sessions.length === 0 ? <EmptyMain claudePath={claudePath} /> : null}
             {sessions.length > 0 ? (
-              <div className="relative min-h-0 flex-1 overflow-hidden">
-                {sessions.map((s) => (
-                  <div
-                    key={s.id}
-                    className="absolute inset-0"
-                    style={{ display: s.id === activeId ? 'block' : 'none' }}
-                  >
-                    <SessionPane session={s} visible={s.id === activeId} />
-                  </div>
-                ))}
-              </div>
+              <>
+                {activeSession ? <ActiveAgentBar session={activeSession} /> : null}
+                <div className="relative min-h-0 flex-1 overflow-hidden">
+                  {sessions.map((s) => (
+                    <div
+                      key={s.id}
+                      className="absolute inset-0"
+                      style={{ display: s.id === activeId ? 'block' : 'none' }}
+                    >
+                      <SessionPane session={s} visible={s.id === activeId} />
+                    </div>
+                  ))}
+                </div>
+              </>
             ) : null}
             {activeSession ? <VoiceButton /> : null}
           </div>
@@ -304,7 +308,7 @@ function EmptyMain({ claudePath }: { claudePath: string | null | undefined }) {
     useProjects((s) => s.projects.find((p) => p.path === s.currentPath)?.path) ?? null
 
   return (
-    <div className="flex flex-1 items-center justify-center overflow-y-auto px-8 py-12 df-scroll">
+    <div className="df-hero-bg df-scroll flex flex-1 items-center justify-center overflow-y-auto px-8 py-12">
       <div className="w-full max-w-2xl df-fade-in">
         {/* Hero */}
         <div className="mb-8 text-center">

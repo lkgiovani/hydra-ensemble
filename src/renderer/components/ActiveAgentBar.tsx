@@ -1,0 +1,124 @@
+import { useEffect, useState } from 'react'
+import { GitBranch, Edit3, RotateCw } from 'lucide-react'
+import type { SessionMeta } from '../../shared/types'
+import AgentAvatar from './AgentAvatar'
+import SessionStatePill from './SessionStatePill'
+import AgentEditDialog from './AgentEditDialog'
+import { defaultAgentColor, hexAlpha } from '../lib/agent'
+
+interface Props {
+  session: SessionMeta
+  onRestart?: () => void
+}
+
+/**
+ * Compact strip rendered above the active terminal. Conveys "you are inside
+ * agent X's workspace" with avatar, name, branch, and live sub-status.
+ */
+export default function ActiveAgentBar({ session, onRestart }: Props) {
+  const [editing, setEditing] = useState<SessionMeta | null>(null)
+  const [, force] = useState(0)
+  const accent = session.accentColor || defaultAgentColor(session.id)
+
+  // Cheap re-render so the live sub-status feels alive (clock dots).
+  useEffect(() => {
+    if (session.state !== 'thinking' && session.state !== 'generating') return
+    const t = setInterval(() => force((n) => n + 1), 700)
+    return () => clearInterval(t)
+  }, [session.state])
+
+  return (
+    <div
+      className="flex shrink-0 items-center gap-3 border-b border-border-soft bg-bg-2 px-3 py-2"
+      style={{ boxShadow: `inset 0 -2px 0 0 ${hexAlpha(accent, 0.45)}` }}
+    >
+      <button
+        type="button"
+        onClick={() => setEditing(session)}
+        className="flex items-center gap-2.5 rounded-sm px-1 py-0.5 transition hover:bg-bg-3"
+        title="edit agent"
+      >
+        <AgentAvatar session={session} size={26} />
+        <div className="flex min-w-0 flex-col text-left leading-tight">
+          <span className="truncate text-sm font-semibold text-text-1">{session.name}</span>
+          {session.description ? (
+            <span className="truncate text-[11px] italic text-text-3">{session.description}</span>
+          ) : (
+            <span className="font-mono text-[10px] text-text-4">/{session.id.slice(0, 8)}</span>
+          )}
+        </div>
+      </button>
+
+      <span className="h-6 w-px bg-border-soft" aria-hidden />
+
+      <SessionStatePill state={session.state ?? 'idle'} />
+
+      {session.subStatus ? (
+        <div className="flex min-w-0 items-center gap-1.5 truncate font-mono text-[11px] text-text-3">
+          <span className="text-text-4">{session.subStatus}</span>
+          {session.subTarget ? (
+            <span className="truncate text-text-2">{session.subTarget}</span>
+          ) : null}
+          {(session.state === 'thinking' || session.state === 'generating') ? (
+            <BlinkingDots />
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="ml-auto flex shrink-0 items-center gap-3 text-[11px] text-text-3">
+        {session.branch ? (
+          <span className="flex items-center gap-1.5 font-mono">
+            <GitBranch size={12} strokeWidth={1.75} className="text-text-4" />
+            <span className="text-text-2">{session.branch}</span>
+          </span>
+        ) : null}
+        <span className="font-mono text-text-4">·</span>
+        <span className="font-mono">
+          <span className="text-text-4">model</span>{' '}
+          <span className="text-text-2">{session.model ?? '—'}</span>
+        </span>
+        <span className="font-mono">
+          <span
+            className={
+              session.cost && session.cost > 0 ? 'text-status-generating' : 'text-text-4'
+            }
+          >
+            {session.cost && session.cost > 0 ? `$${session.cost.toFixed(2)}` : '<$0.01'}
+          </span>
+        </span>
+        <span className="h-5 w-px bg-border-soft" aria-hidden />
+        <button
+          type="button"
+          onClick={() => setEditing(session)}
+          className="rounded-sm p-1 text-text-4 hover:bg-bg-3 hover:text-text-1"
+          title="edit agent"
+          aria-label="edit agent"
+        >
+          <Edit3 size={12} strokeWidth={1.75} />
+        </button>
+        {onRestart ? (
+          <button
+            type="button"
+            onClick={onRestart}
+            className="rounded-sm p-1 text-text-4 hover:bg-bg-3 hover:text-text-1"
+            title="restart"
+            aria-label="restart"
+          >
+            <RotateCw size={12} strokeWidth={1.75} />
+          </button>
+        ) : null}
+      </div>
+
+      <AgentEditDialog session={editing} onClose={() => setEditing(null)} />
+    </div>
+  )
+}
+
+function BlinkingDots() {
+  const [n, setN] = useState(0)
+  useEffect(() => {
+    const t = setInterval(() => setN((v) => (v + 1) % 4), 400)
+    return () => clearInterval(t)
+  }, [])
+  return <span className="font-mono text-text-4">{'.'.repeat(n)}</span>
+}
