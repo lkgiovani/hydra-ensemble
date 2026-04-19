@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, Menu, shell } from 'electron'
 import { join } from 'node:path'
 import { PtyManager } from './pty/manager'
 import { AnalyzerManager } from './pty/analyzer-manager'
@@ -66,6 +66,10 @@ function createWindow(): BrowserWindow {
     show: false,
     backgroundColor: '#0d0d0f',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    // Hide the menu bar entirely on Linux/Windows. The app draws its own
+    // header so File/Edit/View/Window/Help is just visual noise. macOS
+    // keeps a real app menu because the OS expects one at the top.
+    autoHideMenuBar: process.platform !== 'darwin',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -73,6 +77,12 @@ function createWindow(): BrowserWindow {
       sandbox: false
     }
   })
+
+  // Belt-and-braces: also drop the menu so Alt won't bring it back.
+  if (process.platform !== 'darwin') {
+    win.setMenuBarVisibility(false)
+    win.setMenu(null)
+  }
 
   win.on('ready-to-show', () => {
     win.show()
@@ -125,6 +135,13 @@ jsonlManager.onAnyUpdate = (update: JsonlUpdate) => {
 }
 
 app.whenReady().then(async () => {
+  // Nuke the application-wide menu on Linux/Windows so child windows
+  // never inherit a stray File/Edit/View/Window/Help bar. On macOS we
+  // leave Electron's default menu intact because the OS top bar needs
+  // an app menu to show the standard Cmd+Q / About / Hide entries.
+  if (process.platform !== 'darwin') {
+    Menu.setApplicationMenu(null)
+  }
   initStore()
   // One-time migrate host ~/.claude/.credentials.json from any legacy
   // shadow dir so login persists across newly-spawned sessions.
