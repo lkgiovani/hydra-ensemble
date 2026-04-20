@@ -47,6 +47,7 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
   const updateActiveBuffer = useEditor((s) => s.updateActiveBuffer)
   const saveActive = useEditor((s) => s.saveActive)
   const setOverrideRoot = useEditor((s) => s.setOverrideRoot)
+  const closeAllFiles = useEditor((s) => s.closeAllFiles)
 
   // Sidebar width (Files / Changes / Search pane). Persisted + drag-resizable.
   const sidebarWidth = useEditorSidebarSize((s) => s.width)
@@ -96,11 +97,21 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
   const overrideRoot = useEditor((s) => s.overrideRoot)
   const root = overrideRoot ?? sessionRoot
 
-  // When the editor transitions from open → closed, drop any .claude
-  // root override so the next open starts at the session worktree.
+  // When the editor transitions from open → closed:
+  //   * drop any .claude root override so the next open starts at the
+  //     session worktree.
+  //   * if we were in .claude mode, also flush every open file tab. The
+  //     next Ctrl+E should feel like a fresh editor instead of landing
+  //     on whichever .claude file the user was last browsing.
   useEffect(() => {
-    if (!open) setOverrideRoot(null)
-  }, [open, setOverrideRoot])
+    if (open) return
+    if (overrideRoot) {
+      closeAllFiles()
+      setOverrideRoot(null)
+    } else {
+      setOverrideRoot(null)
+    }
+  }, [open, overrideRoot, setOverrideRoot, closeAllFiles])
 
   // Force the sidebar to the Files tab whenever the user enters
   // .claude-mode — they just asked to browse that dir, so surfacing

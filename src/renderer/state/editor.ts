@@ -14,6 +14,7 @@ interface EditorState {
   toggleEditor: () => void
   openFile: (path: string) => Promise<void>
   closeFile: (path: string) => void
+  closeAllFiles: () => void
   setActive: (path: string) => void
   setOverrideRoot: (root: string | null) => void
   /** Replace the buffer in memory (e.g. after the user types in CodeMirror). */
@@ -61,6 +62,8 @@ export const useEditor = create<EditorState>((set, get) => ({
       return { openFiles, activeFilePath }
     })
   },
+
+  closeAllFiles: () => set({ openFiles: [], activeFilePath: null }),
 
   setActive: (path) => set({ activeFilePath: path }),
 
