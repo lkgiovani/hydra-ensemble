@@ -160,12 +160,27 @@ export function parseTranscriptText(text: string): TranscriptMessage[] {
 }
 
 /**
- * Find the most-recently-modified `.jsonl` inside `<claudeConfigDir>/projects/<encoded-cwd>/`.
- * Returns null if the directory or any jsonl file doesn't exist yet (fresh session).
+ * Clock skew + spawn latency between our SessionMeta timestamp and claude's
+ * first JSONL write. 2s is generous without letting a prior session's file
+ * slip through unless it was literally a second away.
+ */
+const BIRTH_TIME_MARGIN_MS = 2000
+
+/**
+ * Find the `.jsonl` inside `<claudeConfigDir>/projects/<encoded-cwd>/` that
+ * belongs to THIS session. Multiple sessions can share a cwd (claude groups
+ * by cwd, not by our session id), so plain "newest" matching would surface
+ * the file of whichever session was most recently written — including dead
+ * sessions the user already closed.
+ *
+ * Filter by birth time (ctime on Linux when birthtime isn't tracked): any
+ * file whose inode was created before this session started can't belong
+ * to this session. Inside the filtered set, pick the newest by mtime.
  */
 export async function findSessionJsonl(
   claudeConfigDir: string,
-  cwd: string
+  cwd: string,
+  createdAfterMs?: number
 ): Promise<string | null> {
   const dir = join(claudeConfigDir, 'projects', encodePath(cwd))
   if (!existsSync(dir)) return null
@@ -175,6 +190,8 @@ export async function findSessionJsonl(
   } catch {
     return null
   }
+  const cutoff =
+    typeof createdAfterMs === 'number' ? createdAfterMs - BIRTH_TIME_MARGIN_MS : -Infinity
   let newest: string | null = null
   let newestMtime = -Infinity
   for (const name of entries) {
@@ -182,6 +199,11 @@ export async function findSessionJsonl(
     const full = join(dir, name)
     try {
       const st = await stat(full)
+      // Prefer birthtime when the FS tracks it; fall back to ctime (inode
+      // change time — covers renames but is reliably set at creation on
+      // Linux even when birthtime isn't).
+      const born = st.birthtimeMs > 0 ? st.birthtimeMs : st.ctimeMs
+      if (born < cutoff) continue
       if (st.mtimeMs > newestMtime) {
         newestMtime = st.mtimeMs
         newest = full
@@ -201,8 +223,13 @@ export async function readTranscript(opts: {
   sessionId: string
   claudeConfigDir: string
   cwd: string
+  /** ISO-8601 string from SessionMeta.createdAt. JSONL files born before
+   *  this timestamp (minus a small margin) are assumed to belong to a
+   *  different session and ignored. */
+  createdAt?: string
 }): Promise<TranscriptPayload> {
-  const path = await findSessionJsonl(opts.claudeConfigDir, opts.cwd)
+  const createdAfterMs = opts.createdAt ? new Date(opts.createdAt).getTime() : undefined
+  const path = await findSessionJsonl(opts.claudeConfigDir, opts.cwd, createdAfterMs)
   if (!path) {
     return { sessionId: opts.sessionId, path: null, messages: [] }
   }

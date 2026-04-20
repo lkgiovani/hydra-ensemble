@@ -43,7 +43,8 @@ export function registerSessionIpc(
       return readTranscript({
         sessionId: meta.id,
         claudeConfigDir: meta.claudeConfigDir,
-        cwd: meta.cwd
+        cwd: meta.cwd,
+        createdAt: meta.createdAt
       })
     }
   )

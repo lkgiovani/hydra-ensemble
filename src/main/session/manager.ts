@@ -284,7 +284,8 @@ export class SessionManager {
     this.deps.jsonl?.start({
       id: ptyId,
       claudeConfigDir: meta.claudeConfigDir,
-      cwd: meta.cwd
+      cwd: meta.cwd,
+      createdAt: meta.createdAt
     })
 
     if (!opts.shellOnly) {

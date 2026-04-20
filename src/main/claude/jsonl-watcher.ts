@@ -38,6 +38,10 @@ export interface JsonlWatcherOptions {
   sessionId: string
   claudeConfigDir: string
   cwd: string
+  /** ISO-8601 moment our SessionMeta was created. Used to ignore JSONL
+   *  files that predate this session (claude groups by cwd, not by our
+   *  session id, so a prior session in the same cwd left a file behind). */
+  sessionCreatedAt?: string
   onUpdate: (update: JsonlUpdate) => void
 }
 
@@ -201,6 +205,9 @@ export class JsonlWatcher {
   private latestSubStatus: string | undefined
   private latestSubTarget: string | undefined
   private readonly projectDir: string
+  /** Session start timestamp (ms). Any JSONL born before this minus a
+   *  small margin is from a previous session in the same cwd. */
+  private readonly createdAfterMs: number
 
   private totalCost = 0
   private totalTokensIn = 0
@@ -227,6 +234,11 @@ export class JsonlWatcher {
     this.sessionId = opts.sessionId
     this.onUpdate = opts.onUpdate
     this.projectDir = join(opts.claudeConfigDir, 'projects', encodePath(opts.cwd))
+    // 2000ms matches the transcript parser's margin — keep in sync so
+    // both subsystems agree on which JSONL is "ours".
+    this.createdAfterMs = opts.sessionCreatedAt
+      ? new Date(opts.sessionCreatedAt).getTime() - 2000
+      : -Infinity
     void this.resolveAndWatch()
   }
 
@@ -309,6 +321,11 @@ export class JsonlWatcher {
       const full = join(this.projectDir, name)
       try {
         const st = await stat(full)
+        // Skip JSONL files from previous sessions in this same cwd.
+        // birthtimeMs is 0 on filesystems that don't track it — ctimeMs
+        // is the reliable fallback on Linux.
+        const born = st.birthtimeMs > 0 ? st.birthtimeMs : st.ctimeMs
+        if (born < this.createdAfterMs) continue
         const mtime = st.mtimeMs
         if (mtime > newestMtime) {
           newestMtime = mtime

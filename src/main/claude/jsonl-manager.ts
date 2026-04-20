@@ -6,6 +6,9 @@ export interface JsonlSessionDescriptor {
   id: string
   claudeConfigDir: string
   cwd: string
+  /** ISO-8601 SessionMeta.createdAt — so the watcher can ignore JSONLs
+   *  that predate this session (prior sibling in the same cwd). */
+  createdAt?: string
 }
 
 /**
@@ -29,6 +32,7 @@ export class JsonlManager {
       sessionId: session.id,
       claudeConfigDir: session.claudeConfigDir,
       cwd: session.cwd,
+      sessionCreatedAt: session.createdAt,
       onUpdate: (update: JsonlUpdate) => {
         this.window?.webContents.send('session:jsonl', update)
         this.onAnyUpdate?.(update)

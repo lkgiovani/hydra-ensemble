@@ -53,17 +53,17 @@ export default function ChatView({ session, visible }: Props) {
     if (!text || sending) return
     setSending(true)
     try {
-      // Optimistic state flip — treat this as a submit so the state pill
-      // follows the same fast path as the xterm view.
-      useSessions.getState().patchSession(session.id, { state: 'thinking' })
-      void window.api.session.syncState(session.id, 'thinking')
       // Write text + CR to the PTY. Claude's TUI captures the line and
       // sends it as a user message, which then lands in the JSONL →
-      // transcriptChanged event → re-renders this list.
-      await window.api.pty.write(session.ptyId, text + '\r')
+      // transcriptChanged event → re-renders this list. sendCommand
+      // also optimistically flips the state pill to 'thinking'.
+      sendCommand(text)
       setInput('')
-      // Focus stays in the textarea so the user can keep typing.
-      textareaRef.current?.focus()
+      // Reset auto-grown textarea height and keep focus for continued typing.
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto'
+        textareaRef.current.focus()
+      }
     } finally {
       setSending(false)
     }
