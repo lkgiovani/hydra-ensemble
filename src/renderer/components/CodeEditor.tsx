@@ -25,6 +25,7 @@ import MarkdownPreview from './editor/MarkdownPreview'
 import GitChangesPanel from './editor/GitChangesPanel'
 import InlineSearch from './editor/InlineSearch'
 import SearchPanel from './editor/SearchPanel'
+import DiffView from './editor/DiffView'
 import { fmtShortcut, hasMod } from '../lib/platform'
 
 type SideTab = 'files' | 'changes' | 'search'
@@ -47,6 +48,8 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
   const updateActiveBuffer = useEditor((s) => s.updateActiveBuffer)
   const saveActive = useEditor((s) => s.saveActive)
   const setOverrideRoot = useEditor((s) => s.setOverrideRoot)
+  const diffPreview = useEditor((s) => s.diffPreview)
+  const setDiffPreview = useEditor((s) => s.setDiffPreview)
   const closeAllFiles = useEditor((s) => s.closeAllFiles)
 
   // Sidebar width (Files / Changes / Search pane). Persisted + drag-resizable.
@@ -424,7 +427,29 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
             })}
           </div>
           <div className="relative min-h-0 flex-1 overflow-hidden bg-bg-1 p-2">
-            {activeFile && activeFile.encoding === 'utf-8' ? (
+            {diffPreview ? (
+              <div className="flex h-full flex-col gap-2">
+                <div className="flex items-center gap-2 rounded-md border border-border-soft bg-bg-2 px-3 py-1.5">
+                  <GitCommit size={12} strokeWidth={1.75} className="text-accent-400" />
+                  <span className="font-mono text-[11px] text-text-1">{diffPreview.path}</span>
+                  <span className="rounded-sm border border-border-soft bg-bg-3 px-1.5 font-mono text-[9.5px] uppercase tracking-[0.14em] text-text-3">
+                    {diffPreview.status}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setDiffPreview(null)}
+                    className="ml-auto rounded-sm p-1 text-text-3 hover:bg-bg-3 hover:text-text-1"
+                    aria-label="Close diff"
+                    title="Close diff"
+                  >
+                    <X size={12} strokeWidth={1.75} />
+                  </button>
+                </div>
+                <div className="min-h-0 flex-1">
+                  <DiffView diff={diffPreview.patch} fill emptyLabel="no textual diff" />
+                </div>
+              </div>
+            ) : activeFile && activeFile.encoding === 'utf-8' ? (
               showPreview ? (
                 <MarkdownPreview markdown={activeFile.bytes} />
               ) : (

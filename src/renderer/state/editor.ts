@@ -1,6 +1,16 @@
 import { create } from 'zustand'
 import type { FileContent } from '../../shared/types'
 
+/** A diff the user is previewing from the git changes panel. Rendered
+ *  full-width in the main editor slot, takes priority over the normal
+ *  CodeMirror buffer. Cleared when the user picks a regular file or
+ *  closes the diff. */
+export interface DiffPreview {
+  path: string
+  patch: string
+  status: 'modified' | 'added' | 'deleted' | 'renamed' | 'untracked'
+}
+
 interface EditorState {
   openFiles: FileContent[]
   activeFilePath: string | null
@@ -9,6 +19,9 @@ interface EditorState {
    *  session's worktree. Used to pin the editor to `.claude/` after the
    *  user clicks a file under the .claude toolkit tab. Cleared on close. */
   overrideRoot: string | null
+  /** The diff preview currently shown in the main editor area, or null
+   *  when a regular file is active. Set from GitChangesPanel. */
+  diffPreview: DiffPreview | null
   openEditor: () => void
   closeEditor: () => void
   toggleEditor: () => void
@@ -17,6 +30,7 @@ interface EditorState {
   closeAllFiles: () => void
   setActive: (path: string) => void
   setOverrideRoot: (root: string | null) => void
+  setDiffPreview: (preview: DiffPreview | null) => void
   /** Replace the buffer in memory (e.g. after the user types in CodeMirror). */
   updateActiveBuffer: (text: string) => void
   /** Persist the active buffer to disk via the IPC bridge. */
@@ -28,23 +42,28 @@ export const useEditor = create<EditorState>((set, get) => ({
   activeFilePath: null,
   editorOpen: false,
   overrideRoot: null,
+  diffPreview: null,
 
   openEditor: () => set({ editorOpen: true }),
-  closeEditor: () => set({ editorOpen: false }),
+  closeEditor: () => set({ editorOpen: false, diffPreview: null }),
   toggleEditor: () => set((s) => ({ editorOpen: !s.editorOpen })),
   setOverrideRoot: (root) => set({ overrideRoot: root }),
+  setDiffPreview: (preview) => set({ diffPreview: preview }),
 
   openFile: async (path) => {
     const existing = get().openFiles.find((f) => f.path === path)
     if (existing) {
-      set({ activeFilePath: path })
+      // Picking a regular file dismisses any diff preview — the buffer
+      // should take the main slot so the user can keep editing.
+      set({ activeFilePath: path, diffPreview: null })
       return
     }
     try {
       const file = await window.api.editor.readFile(path)
       set((s) => ({
         openFiles: [...s.openFiles, file],
-        activeFilePath: file.path
+        activeFilePath: file.path,
+        diffPreview: null
       }))
     } catch (err) {
       // eslint-disable-next-line no-console
@@ -65,7 +84,7 @@ export const useEditor = create<EditorState>((set, get) => ({
 
   closeAllFiles: () => set({ openFiles: [], activeFilePath: null }),
 
-  setActive: (path) => set({ activeFilePath: path }),
+  setActive: (path) => set({ activeFilePath: path, diffPreview: null }),
 
   updateActiveBuffer: (text) => {
     set((s) => {

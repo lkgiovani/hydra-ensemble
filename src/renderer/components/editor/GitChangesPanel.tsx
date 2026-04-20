@@ -10,7 +10,7 @@ import {
   Square,
 } from 'lucide-react'
 import type { ChangedFile } from '../../../shared/types'
-import DiffView from './DiffView'
+import { useEditor } from '../../state/editor'
 
 interface Props {
   cwd: string | null
@@ -33,9 +33,10 @@ const STATUS_META: Record<ChangedFile['status'], { label: string; cls: string }>
  * spinner stuck forever after the user clicked Refresh a few times.
  */
 export default function GitChangesPanel({ cwd }: Props) {
+  const setDiffPreview = useEditor((s) => s.setDiffPreview)
+  const diffPreview = useEditor((s) => s.diffPreview)
   const [files, setFiles] = useState<ChangedFile[]>([])
   const [selectedPath, setSelectedPath] = useState<string | null>(null)
-  const [diff, setDiff] = useState<string>('')
   const [picked, setPicked] = useState<Set<string>>(() => new Set())
   const [message, setMessage] = useState<string>('')
 
@@ -96,11 +97,15 @@ export default function GitChangesPanel({ cwd }: Props) {
         const res = await window.api.git.getDiff(cwd, path, useStaged)
         if (gen !== diffGen.current) return
         if (!res.ok) {
-          setDiff('')
+          setDiffPreview(null)
           setError(res.error)
           return
         }
-        setDiff(res.value)
+        setDiffPreview({
+          path,
+          patch: res.value,
+          status: file?.status ?? 'modified'
+        })
       } catch (err) {
         if (gen !== diffGen.current) return
         setError((err as Error).message)
@@ -108,7 +113,7 @@ export default function GitChangesPanel({ cwd }: Props) {
         if (gen === diffGen.current) setDiffLoading(false)
       }
     },
-    [cwd, files]
+    [cwd, files, setDiffPreview]
   )
 
   // ---------- effects ----------
@@ -120,23 +125,23 @@ export default function GitChangesPanel({ cwd }: Props) {
     diffGen.current += 1
     setFiles([])
     setSelectedPath(null)
-    setDiff('')
+    setDiffPreview(null)
     setPicked(new Set())
     setMessage('')
     setError(null)
     if (cwd) void loadStatus()
-  }, [cwd, loadStatus])
+  }, [cwd, loadStatus, setDiffPreview])
 
   // Load the diff whenever the selected path changes. No-op when nothing
   // is selected — the diff pane just shows the empty-state label.
   useEffect(() => {
     if (!selectedPath) {
-      setDiff('')
+      setDiffPreview(null)
       setDiffLoading(false)
       return
     }
     void loadDiff(selectedPath)
-  }, [selectedPath, loadDiff])
+  }, [selectedPath, loadDiff, setDiffPreview])
 
   // ---------- derived ----------
 
@@ -316,18 +321,32 @@ export default function GitChangesPanel({ cwd }: Props) {
         )}
       </ul>
 
-      <div className="min-h-0 flex-1 overflow-hidden bg-bg-1 p-2">
+      {/* Status strip that used to host the preview. The diff itself now
+          renders full-width in the main editor slot (look to the right).
+          Keep a thin strip here so the panel is not empty when nothing is
+          selected and so the user gets feedback while the diff is loading. */}
+      <div className="flex min-h-0 flex-1 items-start overflow-hidden bg-bg-1 p-3">
         {diffLoading ? (
-          <div className="flex h-full items-center justify-center gap-2 text-[11px] text-text-3">
+          <div className="flex w-full items-center gap-2 text-[11px] text-text-3">
             <Loader2 size={12} strokeWidth={1.75} className="animate-spin" />
             loading diff…
           </div>
+        ) : diffPreview ? (
+          <div className="flex w-full flex-col gap-1 text-[11px]">
+            <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-text-4">
+              showing diff
+            </span>
+            <span className="truncate font-mono text-text-1" title={diffPreview.path}>
+              {diffPreview.path}
+            </span>
+            <span className="font-mono text-[10px] text-text-3">
+              rendered in the editor area →
+            </span>
+          </div>
         ) : (
-          <DiffView
-            diff={diff}
-            fill
-            emptyLabel={selectedPath ? 'no textual diff' : 'select a file to view the diff'}
-          />
+          <div className="w-full text-center font-mono text-[10.5px] text-text-4">
+            select a file to preview its diff in the editor
+          </div>
         )}
       </div>
 
