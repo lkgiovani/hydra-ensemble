@@ -29,3 +29,10 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
+
+# makepkg build artifacts (inside packaging/aur/)
+packaging/aur/pkg/
+packaging/aur/src/
+packaging/aur/*.AppImage
+packaging/aur/*.pkg.tar.zst
+packaging/aur/*.png
