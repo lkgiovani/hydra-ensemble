@@ -5,12 +5,17 @@ interface EditorState {
   openFiles: FileContent[]
   activeFilePath: string | null
   editorOpen: boolean
+  /** When set, the editor's file tree is rooted HERE instead of the active
+   *  session's worktree. Used to pin the editor to `.claude/` after the
+   *  user clicks a file under the .claude toolkit tab. Cleared on close. */
+  overrideRoot: string | null
   openEditor: () => void
   closeEditor: () => void
   toggleEditor: () => void
   openFile: (path: string) => Promise<void>
   closeFile: (path: string) => void
   setActive: (path: string) => void
+  setOverrideRoot: (root: string | null) => void
   /** Replace the buffer in memory (e.g. after the user types in CodeMirror). */
   updateActiveBuffer: (text: string) => void
   /** Persist the active buffer to disk via the IPC bridge. */
@@ -21,10 +26,12 @@ export const useEditor = create<EditorState>((set, get) => ({
   openFiles: [],
   activeFilePath: null,
   editorOpen: false,
+  overrideRoot: null,
 
   openEditor: () => set({ editorOpen: true }),
   closeEditor: () => set({ editorOpen: false }),
   toggleEditor: () => set((s) => ({ editorOpen: !s.editorOpen })),
+  setOverrideRoot: (root) => set({ overrideRoot: root }),
 
   openFile: async (path) => {
     const existing = get().openFiles.find((f) => f.path === path)

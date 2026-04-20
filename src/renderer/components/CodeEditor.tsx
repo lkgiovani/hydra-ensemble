@@ -46,6 +46,7 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
   const setActive = useEditor((s) => s.setActive)
   const updateActiveBuffer = useEditor((s) => s.updateActiveBuffer)
   const saveActive = useEditor((s) => s.saveActive)
+  const setOverrideRoot = useEditor((s) => s.setOverrideRoot)
 
   // Sidebar width (Files / Changes / Search pane). Persisted + drag-resizable.
   const sidebarWidth = useEditorSidebarSize((s) => s.width)
@@ -87,7 +88,26 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
     () => sessions.find((s) => s.id === activeSessionId) ?? null,
     [sessions, activeSessionId]
   )
-  const root = activeSession?.worktreePath ?? activeSession?.cwd ?? null
+  const sessionRoot = activeSession?.worktreePath ?? activeSession?.cwd ?? null
+  // When the user opens a file from the .claude tab, the store pins the
+  // file tree to that .claude dir. Cleared on close so the next Ctrl+E
+  // starts fresh at the session worktree. Changes & Search still follow
+  // the session's real cwd — they only make sense in that context.
+  const overrideRoot = useEditor((s) => s.overrideRoot)
+  const root = overrideRoot ?? sessionRoot
+
+  // When the editor transitions from open → closed, drop any .claude
+  // root override so the next open starts at the session worktree.
+  useEffect(() => {
+    if (!open) setOverrideRoot(null)
+  }, [open, setOverrideRoot])
+
+  // Force the sidebar to the Files tab whenever the user enters
+  // .claude-mode — they just asked to browse that dir, so surfacing
+  // the tree is the only thing that makes sense.
+  useEffect(() => {
+    if (overrideRoot) setSideTab('files')
+  }, [overrideRoot])
 
   useEffect(() => {
     if (!open) return
@@ -156,6 +176,14 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
         <div className="flex min-w-0 items-center gap-2 text-sm">
           <Code2 size={14} strokeWidth={1.75} className="text-accent-400" />
           <span className="font-semibold text-text-1">editor</span>
+          {overrideRoot ? (
+            <span
+              className="flex items-center gap-1 rounded-sm border border-accent-500/40 bg-accent-500/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-accent-200"
+              title={`pinned to ${overrideRoot} — close the editor to unpin`}
+            >
+              .claude
+            </span>
+          ) : null}
           {root ? (
             <span className="truncate font-mono text-[11px] text-text-3" title={root}>
               <span className="text-text-4">·</span> {root.split(/[/\\]/).filter(Boolean).pop() ?? root}
@@ -227,9 +255,10 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
             maxWidth: `${EDITOR_SIDEBAR_MAX}px`
           }}
         >
-          {/* Sidebar tabs: Files | Changes | Search */}
+          {/* Sidebar tabs: Search | Files | Changes. Search sits left of
+              Files so Ctrl+Shift+F lands the user at the far-left anchor. */}
           <div className="flex shrink-0 items-stretch border-b border-border-soft bg-bg-2">
-            {(['files', 'changes', 'search'] as const).map((tab) => {
+            {(['search', 'files', 'changes'] as const).map((tab) => {
               const Icon =
                 tab === 'files' ? FolderTree : tab === 'changes' ? GitCommit : SearchIcon
               const active = sideTab === tab

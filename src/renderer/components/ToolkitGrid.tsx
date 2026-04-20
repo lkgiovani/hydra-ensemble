@@ -258,6 +258,7 @@ function ClaudeFolderTab({ cwd }: { cwd: string | null }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const openFile = useEditor((s) => s.openFile)
+  const setOverrideRoot = useEditor((s) => s.setOverrideRoot)
   const openPanel = useSlidePanel((s) => s.open)
 
   useEffect(() => {
@@ -284,7 +285,12 @@ function ClaudeFolderTab({ cwd }: { cwd: string | null }) {
     }
   }, [cwd])
 
-  const onOpen = (path: string): void => {
+  // Opens a file from .claude in the editor AND pins the editor's file
+  // tree to that .claude dir (project or global) so the user can keep
+  // browsing siblings. Override is cleared when the editor closes, so a
+  // fresh Ctrl+E afterwards returns to the session worktree.
+  const onOpen = (path: string, sectionRoot: string): void => {
+    setOverrideRoot(sectionRoot)
     void openFile(path)
     openPanel('editor')
   }
@@ -332,7 +338,7 @@ function ClaudeFolderSection({
 }: {
   label: string
   root: string
-  onOpen: (path: string) => void
+  onOpen: (path: string, sectionRoot: string) => void
 }) {
   const [expanded, setExpanded] = useState(true)
   const short = root.split('/').slice(-3).join('/')
@@ -352,7 +358,9 @@ function ClaudeFolderSection({
         <span>{label}</span>
         <span className="truncate text-text-4/80 normal-case">· {short}</span>
       </button>
-      {expanded ? <ClaudeDirNode path={root} depth={0} onOpen={onOpen} alwaysExpanded /> : null}
+      {expanded ? (
+        <ClaudeDirNode path={root} depth={0} sectionRoot={root} onOpen={onOpen} alwaysExpanded />
+      ) : null}
     </div>
   )
 }
@@ -360,12 +368,14 @@ function ClaudeFolderSection({
 function ClaudeDirNode({
   path,
   depth,
+  sectionRoot,
   onOpen,
   alwaysExpanded = false,
 }: {
   path: string
   depth: number
-  onOpen: (path: string) => void
+  sectionRoot: string
+  onOpen: (path: string, sectionRoot: string) => void
   alwaysExpanded?: boolean
 }) {
   const [expanded, setExpanded] = useState<boolean>(alwaysExpanded)
@@ -431,12 +441,18 @@ function ClaudeDirNode({
         ) : (
           entries?.map((e) =>
             e.isDir ? (
-              <ClaudeDirNode key={e.path} path={e.path} depth={depth + 1} onOpen={onOpen} />
+              <ClaudeDirNode
+                key={e.path}
+                path={e.path}
+                depth={depth + 1}
+                sectionRoot={sectionRoot}
+                onOpen={onOpen}
+              />
             ) : (
               <button
                 key={e.path}
                 type="button"
-                onClick={() => onOpen(e.path)}
+                onClick={() => onOpen(e.path, sectionRoot)}
                 className="flex w-full items-center gap-1.5 truncate py-1 pr-2 text-left text-[11px] text-text-3 hover:bg-bg-3 hover:text-text-1"
                 style={{ paddingLeft: `${8 + (depth + 1) * 12 + 14}px` }}
                 title={e.path}
