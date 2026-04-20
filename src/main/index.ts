@@ -106,6 +106,7 @@ function createWindow(): BrowserWindow {
     minHeight: 600,
     show: false,
     backgroundColor: '#0d0d0f',
+    icon: join(__dirname, '../../resources/icon.png'),
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     // Hide the menu bar entirely on Linux/Windows. The app draws its own
     // header so File/Edit/View/Window/Help is just visual noise. macOS
