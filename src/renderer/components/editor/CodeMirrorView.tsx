@@ -2,26 +2,25 @@ import { useEffect, useRef } from 'react'
 import { EditorState, type Extension, Compartment } from '@codemirror/state'
 import { EditorView, keymap, lineNumbers, highlightActiveLine } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
-import { searchKeymap, highlightSelectionMatches, openSearchPanel } from '@codemirror/search'
+import { highlightSelectionMatches } from '@codemirror/search'
 import { bracketMatching, indentOnInput } from '@codemirror/language'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { vim, Vim } from '@replit/codemirror-vim'
 import { loadLanguageFor } from './languages'
 
 /**
- * Module-level holder for the currently-mounted editor's view. The shell
- * (CodeEditor) uses this to fire shortcuts like Ctrl+F even when focus
- * isn't inside CodeMirror — a single editor is ever live at a time in
- * the current UI so the singleton is safe.
+ * Module-level holder for the currently-mounted editor's view. Consumed
+ * by the custom InlineSearch component to drive find/replace against
+ * whichever file is active, and by the shell to focus the editor after
+ * closing search. A single CodeMirror view is live at a time so the
+ * singleton is safe. We deliberately do NOT bundle @codemirror/search's
+ * default UI — the built-in panel was too far off the rest of the app's
+ * styling and the user rejected it.
  */
 let activeView: EditorView | null = null
 
-export function openActiveSearch(): boolean {
-  const view = activeView
-  if (!view) return false
-  openSearchPanel(view)
-  view.focus()
-  return true
+export function getActiveView(): EditorView | null {
+  return activeView
 }
 
 interface Props {
@@ -88,7 +87,6 @@ export default function CodeMirrorView({ path, initial, onChange, onSave, vimMod
       keymap.of([
         ...defaultKeymap,
         ...historyKeymap,
-        ...searchKeymap,
         indentWithTab,
         {
           key: 'Mod-s',

@@ -14,9 +14,10 @@ import {
 import { useEditor } from '../state/editor'
 import { useSessions } from '../state/sessions'
 import FileTree from './editor/FileTree'
-import CodeMirrorView, { openActiveSearch } from './editor/CodeMirrorView'
+import CodeMirrorView, { getActiveView } from './editor/CodeMirrorView'
 import MarkdownPreview from './editor/MarkdownPreview'
 import GitChangesPanel from './editor/GitChangesPanel'
+import InlineSearch from './editor/InlineSearch'
 import { fmtShortcut, hasMod } from '../lib/platform'
 
 type SideTab = 'files' | 'changes'
@@ -56,6 +57,11 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
     if (sideTab === 'changes') setChangesEverOpened(true)
   }, [sideTab])
 
+  // Inline search overlay — Ctrl+F toggles it. Carries an optional seed
+  // so that opening with a selection prefills the query.
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchSeed, setSearchSeed] = useState('')
+
   const activeSession = useMemo(
     () => sessions.find((s) => s.id === activeSessionId) ?? null,
     [sessions, activeSessionId]
@@ -66,9 +72,11 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
     if (!open) return
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') {
-        // If the CodeMirror search / replace panel is visible, Esc belongs
-        // to it (closes the panel). Don't tear down the whole editor.
-        if (document.querySelector('.cm-panels .cm-search')) return
+        // Close the inline search first if it's up; otherwise close editor.
+        if (searchOpen) {
+          setSearchOpen(false)
+          return
+        }
         onClose()
         return
       }
@@ -77,21 +85,27 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
         void saveActive()
         return
       }
-      // Ctrl/Cmd+F — open the active CodeMirror's search panel. Fires from
-      // anywhere inside the editor shell, not just when the textarea is
-      // focused, so users coming from the sidebar or toolbar still hit it.
+      // Ctrl/Cmd+F — toggle the custom inline search overlay. Seeds the
+      // query with the current selection (if any) so typing on top is
+      // the fast path for "find this word under my cursor".
       if (hasMod(e) && e.key.toLowerCase() === 'f' && !e.shiftKey) {
-        if (openActiveSearch()) {
-          e.preventDefault()
-        }
+        const view = getActiveView()
+        if (!view) return
+        e.preventDefault()
+        const sel = view.state.sliceDoc(
+          view.state.selection.main.from,
+          view.state.selection.main.to
+        )
+        // Don't seed multi-line selections — that's never what the user
+        // is trying to search for.
+        setSearchSeed(sel && !sel.includes('\n') ? sel : '')
+        setSearchOpen(true)
       }
     }
-    // Capture phase so we beat CodeMirror's own keymap for the Esc gate —
-    // otherwise it closes the search panel first, then our handler still
-    // sees Escape and tears down the editor.
+    // Capture phase so we beat CodeMirror's own keymap for Esc handling.
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [open, onClose, saveActive])
+  }, [open, onClose, saveActive, searchOpen])
 
   if (!open) return null
   const activeFile = openFiles.find((f) => f.path === activeFilePath) ?? null
@@ -261,7 +275,7 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
               )
             })}
           </div>
-          <div className="min-h-0 flex-1 overflow-hidden bg-bg-1 p-2">
+          <div className="relative min-h-0 flex-1 overflow-hidden bg-bg-1 p-2">
             {activeFile && activeFile.encoding === 'utf-8' ? (
               showPreview ? (
                 <MarkdownPreview markdown={activeFile.bytes} />
@@ -292,6 +306,23 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
                 </div>
               </div>
             )}
+
+            {/* Inline find/replace overlay. Mounts only when toggled and
+                only when we have an actual CodeMirror view to drive. */}
+            {searchOpen && activeFile && activeFile.encoding === 'utf-8' && !showPreview ? (
+              (() => {
+                const view = getActiveView()
+                if (!view) return null
+                return (
+                  <InlineSearch
+                    key={activeFile.path}
+                    view={view}
+                    initialQuery={searchSeed}
+                    onClose={() => setSearchOpen(false)}
+                  />
+                )
+              })()
+            ) : null}
           </div>
         </section>
       </div>
