@@ -137,13 +137,17 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
         void saveActive()
         return
       }
-      // Ctrl/Cmd+F — toggle the custom inline search overlay. Seeds the
-      // query with the current selection (if any) so typing on top is
-      // the fast path for "find this word under my cursor".
+      // Ctrl/Cmd+F — toggle the inline search overlay. When opening,
+      // seed the query with the current selection (if any) so typing
+      // on top is the fast path for "find this word under my cursor".
       if (hasMod(e) && e.key.toLowerCase() === 'f' && !e.shiftKey) {
         const view = getActiveView()
         if (!view) return
         e.preventDefault()
+        if (searchOpen) {
+          setSearchOpen(false)
+          return
+        }
         const sel = view.state.sliceDoc(
           view.state.selection.main.from,
           view.state.selection.main.to
@@ -154,11 +158,16 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
         setSearchOpen(true)
         return
       }
-      // Ctrl/Cmd+Shift+F — open the cross-file Search tab in the sidebar
-      // and pull focus into its input. Reuses the current CodeMirror
-      // selection as the seed query when it's a single line.
+      // Ctrl/Cmd+Shift+F — toggle the cross-file Search tab in the
+      // sidebar. If it's already showing, bounce back to Files. When
+      // opening, seed the query from the current selection (single-line)
+      // and bump the focus nonce so the input grabs focus.
       if (hasMod(e) && e.key.toLowerCase() === 'f' && e.shiftKey) {
         e.preventDefault()
+        if (sideTab === 'search') {
+          setSideTab('files')
+          return
+        }
         const view = getActiveView()
         const sel = view
           ? view.state.sliceDoc(view.state.selection.main.from, view.state.selection.main.to)
@@ -174,7 +183,7 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
     // Capture phase so we beat CodeMirror's own keymap for Esc handling.
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [open, onClose, saveActive, searchOpen])
+  }, [open, onClose, saveActive, searchOpen, sideTab])
 
   if (!open) return null
   const activeFile = openFiles.find((f) => f.path === activeFilePath) ?? null
