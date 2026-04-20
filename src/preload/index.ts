@@ -124,7 +124,8 @@ const api: HydraEnsembleApi = {
       cwd: string,
       query: string,
       opts?: { caseSensitive?: boolean; wholeWord?: boolean; regex?: boolean }
-    ) => ipcRenderer.invoke('editor:findInFiles', { cwd, query, opts })
+    ) => ipcRenderer.invoke('editor:findInFiles', { cwd, query, opts }),
+    claudeDirs: (cwd: string | null) => ipcRenderer.invoke('editor:claudeDirs', cwd)
   },
   gh: {
     listPRs: (cwd: string): Promise<GitOpResult<PRInfo[]>> =>

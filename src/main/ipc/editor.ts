@@ -19,4 +19,5 @@ export function registerEditorIpc(fs: EditorFs): void {
     (_evt, payload: { cwd: string; query: string; opts?: FindOptions }) =>
       findInFiles(payload.cwd, payload.query, payload.opts ?? {})
   )
+  ipcMain.handle('editor:claudeDirs', (_evt, cwd: string | null) => fs.claudeDirs(cwd))
 }

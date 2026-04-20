@@ -1,4 +1,5 @@
-import { readFile, writeFile, readdir, stat, realpath } from 'node:fs/promises'
+import { readFile, writeFile, readdir, stat, realpath, access } from 'node:fs/promises'
+import { constants as fsConstants } from 'node:fs'
 import { homedir } from 'node:os'
 import { isAbsolute, join, sep } from 'node:path'
 import type { DirEntry, FileContent } from '../../shared/types'
@@ -76,6 +77,27 @@ export class EditorFs {
   async writeFile(path: string, content: string): Promise<void> {
     const safe = await this.assertSafe(path, { allowMissing: true })
     await writeFile(safe, content, { encoding: 'utf-8' })
+  }
+
+  /**
+   * Resolve the two .claude directories visible to the project: the local
+   * one inside `cwd` (if any) and the user's global one in $HOME. Either
+   * can be null when missing, so the UI can collapse sections.
+   */
+  async claudeDirs(cwd: string | null): Promise<{ project: string | null; global: string | null }> {
+    const tryExist = async (p: string): Promise<string | null> => {
+      try {
+        await this.assertSafe(p)
+        await access(p, fsConstants.R_OK)
+        const s = await stat(p)
+        return s.isDirectory() ? p : null
+      } catch {
+        return null
+      }
+    }
+    const project = cwd ? await tryExist(join(cwd, '.claude')) : null
+    const global = await tryExist(join(this.homeRoot, '.claude'))
+    return { project, global }
   }
 
   /**

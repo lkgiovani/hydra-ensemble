@@ -455,6 +455,7 @@ export interface HydraEnsembleApi {
       query: string,
       opts?: FindInFilesOptions
     ) => Promise<FindInFilesResult>
+    claudeDirs: (cwd: string | null) => Promise<{ project: string | null; global: string | null }>
   }
   gh: {
     listPRs: (cwd: string) => Promise<GitOpResult<PRInfo[]>>

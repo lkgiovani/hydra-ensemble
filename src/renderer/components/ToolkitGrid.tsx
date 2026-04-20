@@ -5,6 +5,10 @@ import {
   AlertCircle,
   Check,
   ChevronDown,
+  ChevronRight,
+  File as FileIcon,
+  Folder,
+  Sparkles,
   TerminalSquare,
   SlashSquare,
   Globe,
@@ -16,11 +20,13 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useToolkit } from '../state/toolkit'
 import { useClaudeCommands } from '../state/claudeCommands'
-import type { ClaudeCommand, ToolkitItem } from '../../shared/types'
+import { useEditor } from '../state/editor'
+import { useSlidePanel } from '../state/panels'
+import type { ClaudeCommand, DirEntry, ToolkitItem } from '../../shared/types'
 import { ToolkitIcon, guessIconForLabel } from '../lib/toolkit-icons'
 import { hexAlpha } from '../lib/agent'
 
-type Tab = 'bashes' | 'commands'
+type Tab = 'bashes' | 'commands' | 'claude'
 
 interface Props {
   cwd: string | null
@@ -91,6 +97,12 @@ export default function ToolkitGrid({
           label="commands"
           onClick={() => setTab('commands')}
         />
+        <TabButton
+          active={tab === 'claude'}
+          icon={Sparkles}
+          label=".claude"
+          onClick={() => setTab('claude')}
+        />
         <div className="ml-auto flex items-center gap-1">
           {tab === 'bashes' ? (
             <button
@@ -102,7 +114,7 @@ export default function ToolkitGrid({
               <Settings2 size={11} strokeWidth={1.75} />
               edit
             </button>
-          ) : (
+          ) : tab === 'commands' ? (
             <button
               type="button"
               onClick={() => void refreshCommands(cwd)}
@@ -116,9 +128,42 @@ export default function ToolkitGrid({
               />
               refresh
             </button>
-          )}
+          ) : null}
         </div>
       </header>
+
+      {/* Filter bar — pulled OUT of the scroll area so it stays pinned at
+          the top of the tab and doesn't bleed content behind it (the old
+          `sticky top-0 bg-bg-2/95` leaked the list rows through the
+          backdrop blur, which the user saw as "vazado"). */}
+      {tab === 'commands' ? (
+        <div className="shrink-0 border-b border-border-soft bg-bg-2 px-2 py-1.5">
+          <div
+            className="flex items-center gap-1.5 border border-border-soft bg-bg-1 px-2 py-1 focus-within:border-accent-500/60"
+            style={{ borderRadius: 'var(--radius-sm)' }}
+          >
+            <Search size={11} strokeWidth={1.75} className="shrink-0 text-text-4" />
+            <input
+              type="text"
+              value={commandsQuery}
+              onChange={(e) => setCommandsQuery(e.target.value)}
+              placeholder="filter commands…"
+              className="min-w-0 flex-1 bg-transparent font-mono text-[11px] text-text-1 placeholder:text-text-4 focus:outline-none"
+            />
+            {commandsQuery.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => setCommandsQuery('')}
+                className="shrink-0 text-text-4 hover:text-text-1"
+                title="clear filter"
+                aria-label="clear filter"
+              >
+                <X size={11} strokeWidth={1.75} />
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
 
       <div className="df-scroll min-h-0 flex-1 overflow-y-auto p-2">
         {tab === 'bashes' ? (
@@ -151,14 +196,15 @@ export default function ToolkitGrid({
               ))}
             </div>
           )
-        ) : (
+        ) : tab === 'commands' ? (
           <CommandsTab
             entry={commandsEntry}
             canSend={!!activeSessionPtyId && !!canSendToSession}
             onSend={sendSlash}
             query={commandsQuery}
-            onQueryChange={setCommandsQuery}
           />
+        ) : (
+          <ClaudeFolderTab cwd={cwd} />
         )}
       </div>
 
@@ -168,7 +214,7 @@ export default function ToolkitGrid({
             <span>{items.length} bashes</span>
             <span>{cwd ? '✓ project ready' : 'pick a project to enable'}</span>
           </>
-        ) : (
+        ) : tab === 'commands' ? (
           <>
             <span>
               {(() => {
@@ -192,9 +238,217 @@ export default function ToolkitGrid({
                 : 'no active session'}
             </span>
           </>
+        ) : (
+          <>
+            <span>.claude</span>
+            <span>click a file to open in the editor</span>
+          </>
         )}
       </footer>
     </section>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/*  .claude folder tab                                                 */
+/* ------------------------------------------------------------------ */
+
+function ClaudeFolderTab({ cwd }: { cwd: string | null }) {
+  const [dirs, setDirs] = useState<{ project: string | null; global: string | null } | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const openFile = useEditor((s) => s.openFile)
+  const openPanel = useSlidePanel((s) => s.open)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setError(null)
+    setDirs(null)
+    window.api.editor
+      .claudeDirs(cwd)
+      .then((res) => {
+        if (cancelled) return
+        setDirs(res)
+      })
+      .catch((err: Error) => {
+        if (cancelled) return
+        setError(err.message)
+      })
+      .finally(() => {
+        if (cancelled) return
+        setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [cwd])
+
+  const onOpen = (path: string): void => {
+    void openFile(path)
+    openPanel('editor')
+  }
+
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center gap-2 text-xs text-text-3">
+        <Loader2 size={14} strokeWidth={1.75} className="animate-spin" />
+        scanning .claude/…
+      </div>
+    )
+  }
+  if (error) {
+    return (
+      <div className="m-2 flex items-start gap-2 rounded-md border border-status-attention/30 bg-status-attention/10 px-3 py-2 text-sm text-status-attention">
+        <AlertCircle size={14} strokeWidth={1.75} className="mt-0.5 shrink-0" />
+        <div className="break-words">{error}</div>
+      </div>
+    )
+  }
+  if (!dirs || (!dirs.project && !dirs.global)) {
+    return (
+      <EmptyState
+        icon={Sparkles}
+        title={cwd ? 'no .claude folder found' : 'pick a project to see its .claude folder'}
+      />
+    )
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      {dirs.project ? (
+        <ClaudeFolderSection label="project" root={dirs.project} onOpen={onOpen} />
+      ) : null}
+      {dirs.global ? (
+        <ClaudeFolderSection label="global" root={dirs.global} onOpen={onOpen} />
+      ) : null}
+    </div>
+  )
+}
+
+function ClaudeFolderSection({
+  label,
+  root,
+  onOpen,
+}: {
+  label: string
+  root: string
+  onOpen: (path: string) => void
+}) {
+  const [expanded, setExpanded] = useState(true)
+  const short = root.split('/').slice(-3).join('/')
+  return (
+    <div className="flex flex-col gap-1">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex items-center gap-1.5 px-1 pt-0.5 text-left font-mono text-[10px] uppercase tracking-wider text-text-4 hover:text-text-1"
+      >
+        {expanded ? (
+          <ChevronDown size={10} strokeWidth={1.75} />
+        ) : (
+          <ChevronRight size={10} strokeWidth={1.75} />
+        )}
+        <Globe size={9} strokeWidth={1.75} />
+        <span>{label}</span>
+        <span className="truncate text-text-4/80 normal-case">· {short}</span>
+      </button>
+      {expanded ? <ClaudeDirNode path={root} depth={0} onOpen={onOpen} alwaysExpanded /> : null}
+    </div>
+  )
+}
+
+function ClaudeDirNode({
+  path,
+  depth,
+  onOpen,
+  alwaysExpanded = false,
+}: {
+  path: string
+  depth: number
+  onOpen: (path: string) => void
+  alwaysExpanded?: boolean
+}) {
+  const [expanded, setExpanded] = useState<boolean>(alwaysExpanded)
+  const [entries, setEntries] = useState<DirEntry[] | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  const ensureLoaded = async (): Promise<void> => {
+    if (entries !== null || loading) return
+    setLoading(true)
+    try {
+      const next = await window.api.editor.listDir(path)
+      setEntries(next)
+    } catch {
+      setEntries([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (alwaysExpanded) void ensureLoaded()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [alwaysExpanded, path])
+
+  const toggle = (): void => {
+    if (!expanded) {
+      setExpanded(true)
+      void ensureLoaded()
+    } else {
+      setExpanded(false)
+    }
+  }
+
+  const pad = `${8 + depth * 12}px`
+
+  return (
+    <div>
+      {alwaysExpanded ? null : (
+        <button
+          type="button"
+          onClick={toggle}
+          className="flex w-full items-center gap-1.5 truncate py-1 pr-2 text-left text-[11px] text-text-2 hover:bg-bg-3 hover:text-text-1"
+          style={{ paddingLeft: pad }}
+          title={path}
+        >
+          <ChevronRight
+            size={11}
+            strokeWidth={2}
+            className={`shrink-0 text-text-4 transition-transform ${expanded ? 'rotate-90' : ''}`}
+          />
+          <Folder size={12} strokeWidth={1.75} className="shrink-0 text-accent-400" />
+          <span className="truncate">{path.split('/').pop()}</span>
+        </button>
+      )}
+      {expanded ? (
+        loading ? (
+          <div
+            className="flex items-center gap-1.5 py-1 text-[10.5px] text-text-4"
+            style={{ paddingLeft: `${8 + (depth + 1) * 12}px` }}
+          >
+            <Loader2 size={10} className="animate-spin" /> loading…
+          </div>
+        ) : (
+          entries?.map((e) =>
+            e.isDir ? (
+              <ClaudeDirNode key={e.path} path={e.path} depth={depth + 1} onOpen={onOpen} />
+            ) : (
+              <button
+                key={e.path}
+                type="button"
+                onClick={() => onOpen(e.path)}
+                className="flex w-full items-center gap-1.5 truncate py-1 pr-2 text-left text-[11px] text-text-3 hover:bg-bg-3 hover:text-text-1"
+                style={{ paddingLeft: `${8 + (depth + 1) * 12 + 14}px` }}
+                title={e.path}
+              >
+                <FileIcon size={12} strokeWidth={1.5} className="shrink-0 text-text-4" />
+                <span className="truncate">{e.name}</span>
+              </button>
+            )
+          )
+        )
+      ) : null}
+    </div>
   )
 }
 
@@ -257,14 +511,12 @@ function CommandsTab({
   entry,
   canSend,
   onSend,
-  query,
-  onQueryChange
+  query
 }: {
   entry?: { commands: ClaudeCommand[]; loading: boolean }
   canSend: boolean
   onSend: (name: string) => void
   query: string
-  onQueryChange: (q: string) => void
 }) {
   if (!entry || (entry.loading && entry.commands.length === 0)) {
     return (
@@ -300,34 +552,6 @@ function CommandsTab({
 
   return (
     <div className="flex flex-col gap-2">
-      {/* Sticky search — stays visible at the top of the scroll area. */}
-      <div className="sticky top-0 z-10 -mx-2 -mt-2 border-b border-border-soft bg-bg-2/95 px-2 py-1.5 backdrop-blur">
-        <div
-          className="flex items-center gap-1.5 border border-border-soft bg-bg-1 px-2 py-1 focus-within:border-accent-500/60"
-          style={{ borderRadius: 'var(--radius-sm)' }}
-        >
-          <Search size={11} strokeWidth={1.75} className="shrink-0 text-text-4" />
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => onQueryChange(e.target.value)}
-            placeholder="filter commands…"
-            className="min-w-0 flex-1 bg-transparent font-mono text-[11px] text-text-1 placeholder:text-text-4 focus:outline-none"
-          />
-          {query.length > 0 ? (
-            <button
-              type="button"
-              onClick={() => onQueryChange('')}
-              className="shrink-0 text-text-4 hover:text-text-1"
-              title="clear filter"
-              aria-label="clear filter"
-            >
-              <X size={11} strokeWidth={1.75} />
-            </button>
-          ) : null}
-        </div>
-      </div>
-
       {filtered.length === 0 ? (
         <div className="px-2 py-6 text-center text-xs text-text-3">
           no commands match "{query}"
