@@ -29,6 +29,8 @@ export interface PtyExitEvent {
 // Sessions
 // =============================================================================
 
+export type SessionViewMode = 'cli' | 'visual'
+
 export interface SessionMeta {
   id: string
   name: string
@@ -54,6 +56,8 @@ export interface SessionMeta {
   tokensOut?: number
   model?: string
   latestAssistantText?: string
+  /** 'cli' (xterm) or 'visual' (rendered chat transcript). Defaults to 'cli'. */
+  viewMode?: SessionViewMode
 }
 
 export interface SessionUpdate {
@@ -61,6 +65,7 @@ export interface SessionUpdate {
   avatar?: string
   accentColor?: string
   description?: string
+  viewMode?: SessionViewMode
 }
 
 export type SessionState =
@@ -82,6 +87,8 @@ export interface SessionCreateOptions {
   avatar?: string
   /** Persisted accent colour chosen by the renderer. */
   accentColor?: string
+  /** UI mode the session opens in. Default 'cli'. */
+  viewMode?: SessionViewMode
 }
 
 export type SessionCreateResult =
@@ -104,6 +111,58 @@ export interface JsonlUpdate {
   subStatus?: string
   /** Concrete target — file path, command snippet, search pattern. */
   subTarget?: string
+}
+
+// =============================================================================
+// Transcript (visual chat view — parsed from Claude Code's JSONL session log)
+// =============================================================================
+
+export type TranscriptRole = 'user' | 'assistant' | 'system'
+
+/** A single rendered block inside a transcript message. */
+export type TranscriptBlock =
+  | { kind: 'text'; text: string }
+  | { kind: 'thinking'; text: string }
+  | {
+      kind: 'tool_use'
+      id: string
+      name: string
+      /** Free-form JSON input — parser leaves it untouched for the UI to render. */
+      input: Record<string, unknown>
+    }
+  | {
+      kind: 'tool_result'
+      toolUseId: string
+      /** Plain-text rendering of the result. */
+      text: string
+      isError?: boolean
+    }
+
+export interface TranscriptMessage {
+  /** Stable index into the transcript (turn order, 0-based). */
+  index: number
+  role: TranscriptRole
+  blocks: TranscriptBlock[]
+  timestamp?: string
+  /** Model that produced this message (assistant only). */
+  model?: string
+  /** Session uuid from the JSONL line — useful for /rewind targeting. */
+  uuid?: string
+  /** Parent uuid in the JSONL graph (for branch/fork detection). */
+  parentUuid?: string
+  /** Per-message usage (assistant only). */
+  usage?: {
+    inputTokens: number
+    outputTokens: number
+    cacheCreationTokens: number
+    cacheReadTokens: number
+  }
+}
+
+export interface TranscriptPayload {
+  sessionId: string
+  path: string | null
+  messages: TranscriptMessage[]
 }
 
 // =============================================================================
@@ -277,9 +336,14 @@ export interface HydraEnsembleApi {
     /** Align the PTY analyzer's cached state with a renderer-side
      *  optimistic flip so its next frame analysis emits correctly. */
     syncState: (id: string, state: SessionState) => Promise<void>
+    /** Read the full parsed transcript for the session. Returns an empty
+     *  array if the JSONL file hasn't appeared yet. */
+    readTranscript: (id: string) => Promise<TranscriptPayload>
     onChange: (handler: (sessions: SessionMeta[]) => void) => () => void
     onState: (handler: (event: { sessionId: string; state: SessionState }) => void) => () => void
     onJsonl: (handler: (update: JsonlUpdate) => void) => () => void
+    /** Fires (debounced) when a session's JSONL file has new lines. */
+    onTranscriptChanged: (handler: (event: { sessionId: string }) => void) => () => void
   }
   claude: {
     resolvePath: () => Promise<string | null>

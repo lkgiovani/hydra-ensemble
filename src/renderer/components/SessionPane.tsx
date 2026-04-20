@@ -6,6 +6,7 @@ import '@xterm/xterm/css/xterm.css'
 import { RotateCw, AlertTriangle, Trash2, Loader2 } from 'lucide-react'
 import type { SessionMeta } from '../../shared/types'
 import { useSessions } from '../state/sessions'
+import ChatView from './chat/ChatView'
 
 interface Props {
   session: SessionMeta
@@ -189,9 +190,29 @@ export default function SessionPane({ session, visible }: Props) {
     void destroySession(session.id)
   }
 
+  const viewMode = session.viewMode ?? 'cli'
+  const isVisual = viewMode === 'visual'
+
   return (
     <div className="relative h-full w-full">
-      <div ref={containerRef} className="h-full w-full" />
+      {/* xterm container — always mounted so PTY output keeps flowing
+          to the analyzer even when the visual view is the one on top.
+          Visibility toggled instead of unmount so remounting doesn't
+          drop terminal state every time the user switches. */}
+      <div
+        ref={containerRef}
+        className="h-full w-full"
+        style={{
+          visibility: isVisual ? 'hidden' : 'visible',
+          pointerEvents: isVisual ? 'none' : 'auto'
+        }}
+      />
+
+      {isVisual ? (
+        <div className="absolute inset-0">
+          <ChatView session={session} visible={visible} />
+        </div>
+      ) : null}
 
       {starting && !exited ? (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-bg-1/60 backdrop-blur-[2px]">
