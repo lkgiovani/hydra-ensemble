@@ -8,6 +8,7 @@ import {
   GitCommit,
   Pencil,
   Save,
+  Search as SearchIcon,
   Terminal as TerminalIcon,
   X,
 } from 'lucide-react'
@@ -18,9 +19,10 @@ import CodeMirrorView, { getActiveView } from './editor/CodeMirrorView'
 import MarkdownPreview from './editor/MarkdownPreview'
 import GitChangesPanel from './editor/GitChangesPanel'
 import InlineSearch from './editor/InlineSearch'
+import SearchPanel from './editor/SearchPanel'
 import { fmtShortcut, hasMod } from '../lib/platform'
 
-type SideTab = 'files' | 'changes'
+type SideTab = 'files' | 'changes' | 'search'
 
 interface Props {
   open: boolean
@@ -62,6 +64,16 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchSeed, setSearchSeed] = useState('')
 
+  // Cross-file search (Ctrl+Shift+F). Lazy-mount the sidebar tab and
+  // bump the nonce when the shortcut fires so the input refocuses even
+  // if the tab was already open.
+  const [searchEverOpened, setSearchEverOpened] = useState(false)
+  const [globalSearchSeed, setGlobalSearchSeed] = useState('')
+  const [globalSearchFocusNonce, setGlobalSearchFocusNonce] = useState(0)
+  useEffect(() => {
+    if (sideTab === 'search') setSearchEverOpened(true)
+  }, [sideTab])
+
   const activeSession = useMemo(
     () => sessions.find((s) => s.id === activeSessionId) ?? null,
     [sessions, activeSessionId]
@@ -100,6 +112,23 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
         // is trying to search for.
         setSearchSeed(sel && !sel.includes('\n') ? sel : '')
         setSearchOpen(true)
+        return
+      }
+      // Ctrl/Cmd+Shift+F — open the cross-file Search tab in the sidebar
+      // and pull focus into its input. Reuses the current CodeMirror
+      // selection as the seed query when it's a single line.
+      if (hasMod(e) && e.key.toLowerCase() === 'f' && e.shiftKey) {
+        e.preventDefault()
+        const view = getActiveView()
+        const sel = view
+          ? view.state.sliceDoc(view.state.selection.main.from, view.state.selection.main.to)
+          : ''
+        if (sel && !sel.includes('\n')) {
+          setGlobalSearchSeed(sel)
+        }
+        setSideTab('search')
+        setGlobalSearchFocusNonce((n) => n + 1)
+        return
       }
     }
     // Capture phase so we beat CodeMirror's own keymap for Esc handling.
@@ -182,10 +211,11 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <aside className="flex w-64 shrink-0 flex-col border-r border-border-soft bg-bg-2">
-          {/* Sidebar tabs: Files (existing tree) | Changes (git diff + commit) */}
+          {/* Sidebar tabs: Files | Changes | Search */}
           <div className="flex shrink-0 items-stretch border-b border-border-soft bg-bg-2">
-            {(['files', 'changes'] as const).map((tab) => {
-              const Icon = tab === 'files' ? FolderTree : GitCommit
+            {(['files', 'changes', 'search'] as const).map((tab) => {
+              const Icon =
+                tab === 'files' ? FolderTree : tab === 'changes' ? GitCommit : SearchIcon
               const active = sideTab === tab
               return (
                 <button
@@ -233,6 +263,19 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
               aria-hidden={sideTab !== 'changes'}
             >
               {changesEverOpened ? <GitChangesPanel cwd={root} /> : null}
+            </div>
+            <div
+              className={`absolute inset-0 ${sideTab === 'search' ? '' : 'hidden'}`}
+              aria-hidden={sideTab !== 'search'}
+            >
+              {searchEverOpened ? (
+                <SearchPanel
+                  cwd={root}
+                  onOpenMatch={(p) => void openFile(p)}
+                  initialQuery={globalSearchSeed}
+                  focusNonce={globalSearchFocusNonce}
+                />
+              ) : null}
             </div>
           </div>
         </aside>

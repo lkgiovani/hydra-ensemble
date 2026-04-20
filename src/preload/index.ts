@@ -119,7 +119,12 @@ const api: HydraEnsembleApi = {
       ipcRenderer.invoke('editor:readFile', path),
     listDir: (path: string): Promise<DirEntry[]> => ipcRenderer.invoke('editor:listDir', path),
     writeFile: (path: string, content: string) =>
-      ipcRenderer.invoke('editor:writeFile', { path, content })
+      ipcRenderer.invoke('editor:writeFile', { path, content }),
+    findInFiles: (
+      cwd: string,
+      query: string,
+      opts?: { caseSensitive?: boolean; wholeWord?: boolean; regex?: boolean }
+    ) => ipcRenderer.invoke('editor:findInFiles', { cwd, query, opts })
   },
   gh: {
     listPRs: (cwd: string): Promise<GitOpResult<PRInfo[]>> =>

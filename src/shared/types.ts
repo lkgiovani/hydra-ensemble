@@ -207,6 +207,32 @@ export interface ChangedFile {
   staged?: boolean
 }
 
+export interface FindInFilesOptions {
+  caseSensitive?: boolean
+  wholeWord?: boolean
+  regex?: boolean
+}
+
+export interface FindInFilesMatch {
+  /** Absolute file path. */
+  file: string
+  /** 1-based line number. */
+  line: number
+  /** The matching line (truncated to a few hundred chars). */
+  text: string
+}
+
+export type FindInFilesResult =
+  | {
+      ok: true
+      value: {
+        matches: FindInFilesMatch[]
+        truncated: boolean
+        tool: 'git grep' | 'grep'
+      }
+    }
+  | { ok: false; error: string }
+
 export type GitOpResult<T = void> = { ok: true; value: T } | { ok: false; error: string }
 
 // =============================================================================
@@ -424,6 +450,11 @@ export interface HydraEnsembleApi {
     readFile: (path: string) => Promise<FileContent>
     listDir: (path: string) => Promise<DirEntry[]>
     writeFile: (path: string, content: string) => Promise<void>
+    findInFiles: (
+      cwd: string,
+      query: string,
+      opts?: FindInFilesOptions
+    ) => Promise<FindInFilesResult>
   }
   gh: {
     listPRs: (cwd: string) => Promise<GitOpResult<PRInfo[]>>

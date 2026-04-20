@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import type { EditorFs } from '../editor/fs-bridge'
+import { findInFiles, type FindOptions } from '../editor/find-in-files'
 
 /**
  * Register IPC handlers for the editor file-system bridge. Channel names
@@ -12,5 +13,10 @@ export function registerEditorIpc(fs: EditorFs): void {
     'editor:writeFile',
     (_evt, payload: { path: string; content: string }) =>
       fs.writeFile(payload.path, payload.content)
+  )
+  ipcMain.handle(
+    'editor:findInFiles',
+    (_evt, payload: { cwd: string; query: string; opts?: FindOptions }) =>
+      findInFiles(payload.cwd, payload.query, payload.opts ?? {})
   )
 }

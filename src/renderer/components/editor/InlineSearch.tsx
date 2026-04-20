@@ -97,103 +97,102 @@ export default function InlineSearch({ view, initialQuery, onClose }: Props) {
 
   return (
     <div
-      className="absolute right-3 top-2 z-30 flex select-none items-start gap-0 rounded-md border border-border-mid bg-bg-2/95 shadow-pop backdrop-blur"
-      style={{ width: '360px' }}
+      className="absolute right-3 top-2 z-30 flex w-[min(420px,calc(100%-1.5rem))] select-none flex-col gap-1 rounded-md border border-border-mid bg-bg-2/95 p-1.5 shadow-pop backdrop-blur"
     >
-      {/* Collapse arrow toggles the Replace row. Mirrors VSCode's little caret. */}
-      <button
-        type="button"
-        onClick={() => setShowReplace((v) => !v)}
-        className="flex h-full shrink-0 items-center px-1 text-text-3 hover:text-text-1"
-        title={showReplace ? 'Hide replace' : 'Show replace'}
-        aria-label={showReplace ? 'Hide replace' : 'Show replace'}
-      >
-        {showReplace ? (
-          <ChevronDown size={12} strokeWidth={1.75} />
-        ) : (
-          <ChevronRight size={12} strokeWidth={1.75} />
-        )}
-      </button>
+      {/* Row 1 — chevron + find input + flag toggles + nav / close.
+          The chevron lives INLINE so it stays centered with the search
+          input no matter whether the Replace row is visible. */}
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => setShowReplace((v) => !v)}
+          className="flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-text-3 hover:bg-bg-3 hover:text-text-1"
+          title={showReplace ? 'Hide replace' : 'Show replace'}
+          aria-label={showReplace ? 'Hide replace' : 'Show replace'}
+        >
+          {showReplace ? (
+            <ChevronDown size={12} strokeWidth={1.75} />
+          ) : (
+            <ChevronRight size={12} strokeWidth={1.75} />
+          )}
+        </button>
+        <div className="flex min-w-0 flex-1 items-center rounded-sm border border-border-soft bg-bg-1 focus-within:border-accent-500/60">
+          <input
+            ref={inputRef}
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={onInputKeyDown}
+            placeholder="Search"
+            className="min-w-0 flex-1 bg-transparent px-2 py-0.5 font-mono text-[11.5px] text-text-1 placeholder:text-text-4 focus:outline-none"
+          />
+          <FlagBtn
+            active={caseSensitive}
+            onClick={() => setCaseSensitive((v) => !v)}
+            title="Match case"
+            aria-label="Match case"
+          >
+            <CaseSensitive size={11} strokeWidth={1.75} />
+          </FlagBtn>
+          <FlagBtn
+            active={wholeWord}
+            onClick={() => setWholeWord((v) => !v)}
+            title="Match whole word"
+            aria-label="Match whole word"
+          >
+            <WholeWord size={11} strokeWidth={1.75} />
+          </FlagBtn>
+          <FlagBtn
+            active={regexp}
+            onClick={() => setRegexp((v) => !v)}
+            title="Use regular expression"
+            aria-label="Use regular expression"
+          >
+            <Regex size={11} strokeWidth={1.75} />
+          </FlagBtn>
+        </div>
+        <IconBtn onClick={runPrev} title="Previous match (Shift+Enter)" aria-label="Previous match">
+          <ArrowUp size={11} strokeWidth={1.75} />
+        </IconBtn>
+        <IconBtn onClick={runNext} title="Next match (Enter)" aria-label="Next match">
+          <ArrowDown size={11} strokeWidth={1.75} />
+        </IconBtn>
+        <IconBtn onClick={onClose} title="Close (Esc)" aria-label="Close search">
+          <X size={11} strokeWidth={1.75} />
+        </IconBtn>
+      </div>
 
-      <div className="flex flex-1 flex-col gap-1 py-1.5 pr-1.5">
-        {/* Row 1 — find input + flag toggles + nav / close */}
-        <div className="flex items-center gap-1">
-          <div className="flex flex-1 items-center rounded-sm border border-border-soft bg-bg-1 focus-within:border-accent-500/60">
+      {/* Row 2 — replace input + replace / replace-all.
+          Indented under the chevron so its input lines up with the
+          search input above (visual column alignment with VSCode). */}
+      {showReplace ? (
+        <div className="flex items-center gap-1 pl-6">
+          <div className="flex min-w-0 flex-1 items-center rounded-sm border border-border-soft bg-bg-1 focus-within:border-accent-500/60">
             <input
-              ref={inputRef}
               type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={onInputKeyDown}
-              placeholder="Search"
+              value={replace}
+              onChange={(e) => setReplace(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  runReplaceOne()
+                } else if (e.key === 'Escape') {
+                  e.preventDefault()
+                  onClose()
+                }
+              }}
+              placeholder="Replace"
               className="min-w-0 flex-1 bg-transparent px-2 py-0.5 font-mono text-[11.5px] text-text-1 placeholder:text-text-4 focus:outline-none"
             />
-            <FlagBtn
-              active={caseSensitive}
-              onClick={() => setCaseSensitive((v) => !v)}
-              title="Match case"
-              aria-label="Match case"
-            >
-              <CaseSensitive size={11} strokeWidth={1.75} />
-            </FlagBtn>
-            <FlagBtn
-              active={wholeWord}
-              onClick={() => setWholeWord((v) => !v)}
-              title="Match whole word"
-              aria-label="Match whole word"
-            >
-              <WholeWord size={11} strokeWidth={1.75} />
-            </FlagBtn>
-            <FlagBtn
-              active={regexp}
-              onClick={() => setRegexp((v) => !v)}
-              title="Use regular expression"
-              aria-label="Use regular expression"
-            >
-              <Regex size={11} strokeWidth={1.75} />
-            </FlagBtn>
           </div>
-          <IconBtn onClick={runPrev} title="Previous match (Shift+Enter)" aria-label="Previous match">
-            <ArrowUp size={11} strokeWidth={1.75} />
+          <IconBtn onClick={runReplaceOne} title="Replace" aria-label="Replace">
+            <Replace size={11} strokeWidth={1.75} />
           </IconBtn>
-          <IconBtn onClick={runNext} title="Next match (Enter)" aria-label="Next match">
-            <ArrowDown size={11} strokeWidth={1.75} />
-          </IconBtn>
-          <IconBtn onClick={onClose} title="Close (Esc)" aria-label="Close search">
-            <X size={11} strokeWidth={1.75} />
+          <IconBtn onClick={runReplaceAll} title="Replace all" aria-label="Replace all">
+            <ReplaceAll size={11} strokeWidth={1.75} />
           </IconBtn>
         </div>
-
-        {/* Row 2 — replace input + replace / replace-all */}
-        {showReplace ? (
-          <div className="flex items-center gap-1">
-            <div className="flex flex-1 items-center rounded-sm border border-border-soft bg-bg-1 focus-within:border-accent-500/60">
-              <input
-                type="text"
-                value={replace}
-                onChange={(e) => setReplace(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    runReplaceOne()
-                  } else if (e.key === 'Escape') {
-                    e.preventDefault()
-                    onClose()
-                  }
-                }}
-                placeholder="Replace"
-                className="min-w-0 flex-1 bg-transparent px-2 py-0.5 font-mono text-[11.5px] text-text-1 placeholder:text-text-4 focus:outline-none"
-              />
-            </div>
-            <IconBtn onClick={runReplaceOne} title="Replace" aria-label="Replace">
-              <Replace size={11} strokeWidth={1.75} />
-            </IconBtn>
-            <IconBtn onClick={runReplaceAll} title="Replace all" aria-label="Replace all">
-              <ReplaceAll size={11} strokeWidth={1.75} />
-            </IconBtn>
-          </div>
-        ) : null}
-      </div>
+      ) : null}
     </div>
   )
 }
