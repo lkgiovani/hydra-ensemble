@@ -26,6 +26,8 @@ import HelpOverlay from './components/HelpOverlay'
 import NewSessionDialog from './components/NewSessionDialog'
 import TerminalsPanel from './components/TerminalsPanel'
 import WindowControls from './components/WindowControls'
+import OrchestraView from './orchestra/OrchestraView'
+import { useOrchestra } from './orchestra/state/orchestra'
 import { useSpawnDialog } from './state/spawn'
 import {
   useSlidePanel,
@@ -52,6 +54,9 @@ export default function App() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
+  const [orchestraOpen, setOrchestraOpen] = useState(false)
+  const orchestraEnabled = useOrchestra((s) => s.settings.enabled)
+  const initOrchestra = useOrchestra((s) => s.init)
   const spawnOpen = useSpawnDialog((s) => s.open)
   const showSpawn = useSpawnDialog((s) => s.show)
   const hideSpawn = useSpawnDialog((s) => s.hide)
@@ -94,8 +99,16 @@ export default function App() {
     void initWatchdog()
     void initProjects()
     initTranscripts()
+    void initOrchestra()
     void window.api.claude.resolvePath().then(setClaudePath)
-  }, [initSessions, initToolkit, initWatchdog, initProjects, initTranscripts])
+  }, [
+    initSessions,
+    initToolkit,
+    initWatchdog,
+    initProjects,
+    initTranscripts,
+    initOrchestra
+  ])
 
   // Action handler registry — keyed by ACTIONS id. Edit a binding in the
   // keybinds editor and the dispatcher below picks it up automatically.
@@ -136,7 +149,11 @@ export default function App() {
         }
       },
       'palette.open': () => setPaletteOpen((v) => !v),
-      'help.open': () => setHelpOpen((v) => !v)
+      'help.open': () => setHelpOpen((v) => !v),
+      'orchestra.open': () => {
+        if (!orchestraEnabled) return
+        setOrchestraOpen((v) => !v)
+      }
     }
 
     const onKey = (e: KeyboardEvent): void => {
@@ -216,7 +233,8 @@ export default function App() {
     setActive,
     openGh,
     showSpawn,
-    contextCwd
+    contextCwd,
+    orchestraEnabled
   ])
 
   return (
@@ -488,6 +506,11 @@ export default function App() {
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <HelpOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />
       <NewSessionDialog open={spawnOpen} onClose={hideSpawn} />
+      {orchestraEnabled && orchestraOpen ? (
+        <div className="fixed inset-0 z-[60] bg-bg-0">
+          <OrchestraView onBackToClassic={() => setOrchestraOpen(false)} />
+        </div>
+      ) : null}
     </div>
   )
 }

@@ -1,0 +1,227 @@
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent
+} from 'react'
+import { ChevronRight, Plus, Trash2, Users } from 'lucide-react'
+import type { SafeMode, Team, UUID } from '../../shared/orchestra'
+import ContextMenu, { type ContextMenuItem } from '../components/ContextMenu'
+import { useEditor } from '../state/editor'
+import { useOrchestra } from './state/orchestra'
+import DeleteTeamModal from './modals/DeleteTeamModal'
+
+const INPUT_CLS =
+  'min-w-0 flex-1 rounded-sm px-1.5 py-0.5 text-xs text-text-1 outline-none ring-1 ring-accent-500'
+
+const onEnterEsc = (
+  onEnter: () => void,
+  onEsc: () => void
+): ((e: ReactKeyboardEvent<HTMLInputElement>) => void) => (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); onEnter() }
+  else if (e.key === 'Escape') { e.preventDefault(); onEsc() }
+}
+
+/** Left 220px rail of the Orchestra workspace. See PRD §10.F2 / §11. */
+export default function TeamRail() {
+  const teams = useOrchestra((s) => s.teams)
+  const activeTeamId = useOrchestra((s) => s.activeTeamId)
+  const setActiveTeam = useOrchestra((s) => s.setActiveTeam)
+  const createTeam = useOrchestra((s) => s.createTeam)
+  const renameTeam = useOrchestra((s) => s.renameTeam)
+  const setSafeMode = useOrchestra((s) => s.setSafeMode)
+
+  const [creating, setCreating] = useState(false)
+  const [draftName, setDraftName] = useState('')
+  const [renamingId, setRenamingId] = useState<UUID | null>(null)
+  const [renameDraft, setRenameDraft] = useState('')
+  const [menu, setMenu] = useState<{ x: number; y: number; team: Team } | null>(null)
+  const [pendingDeleteId, setPendingDeleteId] = useState<UUID | null>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+
+  const pendingDeleteTeam = useMemo(
+    () => teams.find((t) => t.id === pendingDeleteId) ?? null,
+    [teams, pendingDeleteId]
+  )
+  const activeIndex = useMemo(() => {
+    const i = teams.findIndex((t) => t.id === activeTeamId)
+    return i === -1 ? 0 : i
+  }, [teams, activeTeamId])
+
+  const cancelCreate = useCallback((): void => { setCreating(false); setDraftName('') }, [])
+  const beginCreate = useCallback((): void => { setCreating(true); setDraftName('') }, [])
+  const commitCreate = useCallback(async (): Promise<void> => {
+    const name = draftName.trim()
+    if (!name) return cancelCreate()
+    const worktreePath = await window.api.project.pickDirectory()
+    if (!worktreePath) return // user bailed at picker; keep input live
+    const created = await createTeam({ name, worktreePath })
+    if (created) cancelCreate()
+  }, [draftName, createTeam, cancelCreate])
+
+  const beginRename = useCallback((team: Team): void => {
+    setRenamingId(team.id); setRenameDraft(team.name)
+  }, [])
+  const commitRename = useCallback(async (): Promise<void> => {
+    if (!renamingId) return
+    const name = renameDraft.trim()
+    const original = teams.find((t) => t.id === renamingId)
+    if (!name || !original || name === original.name) return setRenamingId(null)
+    await renameTeam(renamingId, name)
+    setRenamingId(null)
+  }, [renamingId, renameDraft, teams, renameTeam])
+
+  const buildMenuItems = useCallback(
+    (team: Team): ContextMenuItem[] => {
+      const openClaudeMd = (): void => {
+        // Worktree CLAUDE.md is the practical target until main exposes the
+        // team-folder path as a separate IPC.
+        const path = `${team.worktreePath.replace(/\/$/, '')}/CLAUDE.md`
+        void useEditor.getState().openFile(path)
+        useEditor.getState().openEditor()
+      }
+      const sm = (mode: SafeMode): ContextMenuItem => ({
+        label: `Safe mode: ${mode}${mode === team.safeMode ? ' (current)' : ''}`,
+        onSelect: () => void setSafeMode(team.id, mode),
+        disabled: mode === team.safeMode
+      })
+      return [
+        { label: 'Rename', onSelect: () => beginRename(team) },
+        sm('strict'), sm('prompt'), sm('yolo'),
+        { label: 'Open team CLAUDE.md', onSelect: openClaudeMd },
+        {
+          label: 'Delete team',
+          danger: true,
+          icon: <Trash2 size={14} strokeWidth={1.75} />,
+          onSelect: () => setPendingDeleteId(team.id)
+        }
+      ]
+    },
+    [beginRename, setSafeMode]
+  )
+
+  const onRailKeyDown = useCallback(
+    (e: ReactKeyboardEvent<HTMLDivElement>) => {
+      if (creating || renamingId || teams.length === 0) return
+      const n = teams.length
+      if (e.key === 'ArrowDown') {
+        e.preventDefault(); setActiveTeam(teams[(activeIndex + 1) % n]!.id)
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault(); setActiveTeam(teams[(activeIndex - 1 + n) % n]!.id)
+      } else if (e.key === 'Enter') {
+        e.preventDefault(); setActiveTeam(teams[activeIndex]!.id)
+      }
+    },
+    [creating, renamingId, teams, activeIndex, setActiveTeam]
+  )
+
+  const renderRow = (team: Team) => {
+    const active = team.id === activeTeamId
+    const isRenaming = renamingId === team.id
+    const tone = active
+      ? 'bg-accent-500/15 text-text-1'
+      : 'text-text-2 hover:bg-bg-3 hover:text-text-1'
+    const onCtx = (e: ReactMouseEvent<HTMLDivElement>): void => {
+      e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, team })
+    }
+    return (
+      <div
+        key={team.id}
+        data-team-id={team.id}
+        onContextMenu={onCtx}
+        className={`group flex items-center gap-1.5 rounded-sm px-2 py-1.5 text-sm transition-colors ${tone}`}
+      >
+        <ChevronRight size={12} strokeWidth={1.75} aria-hidden
+          className={active ? 'text-accent-400' : 'text-text-4'} />
+        {isRenaming ? (
+          <input autoFocus aria-label="Rename team" value={renameDraft}
+            onChange={(e) => setRenameDraft(e.target.value)}
+            onBlur={() => void commitRename()}
+            onKeyDown={onEnterEsc(() => void commitRename(), () => setRenamingId(null))}
+            className={`${INPUT_CLS} bg-bg-3`} />
+        ) : (
+          <button type="button" title={team.name}
+            onClick={() => setActiveTeam(team.id)}
+            onDoubleClick={() => beginRename(team)}
+            className="flex min-w-0 flex-1 items-center gap-1 truncate text-left">
+            <span className={`truncate ${active ? 'font-medium' : ''}`}>{team.name}</span>
+            {team.safeMode === 'yolo' && (
+              <span title="yolo safe mode"
+                className="shrink-0 rounded-sm bg-status-attention/20 px-1 text-[9px] font-medium uppercase tracking-wider text-status-attention">
+                yolo
+              </span>
+            )}
+          </button>
+        )}
+        {!isRenaming && (
+          <button type="button" title="Delete team" aria-label={`Delete team ${team.name}`}
+            onClick={(e) => { e.stopPropagation(); setPendingDeleteId(team.id) }}
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-text-4 opacity-0 transition hover:bg-bg-4 hover:text-status-attention group-hover:opacity-100">
+            <Trash2 size={12} strokeWidth={1.75} />
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  const empty = teams.length === 0 && !creating
+
+  return (
+    <aside aria-label="Teams"
+      className="flex h-full w-[220px] shrink-0 flex-col border-r border-border-soft bg-bg-2 text-text-2">
+      <header className="flex h-11 shrink-0 items-center gap-2 border-b border-border-soft px-3">
+        <Users size={13} strokeWidth={1.75} className="text-text-4" />
+        <span className="df-label">teams</span>
+      </header>
+
+      <div ref={listRef} tabIndex={0} onKeyDown={onRailKeyDown}
+        className="df-scroll flex-1 overflow-y-auto py-2 outline-none focus-visible:bg-bg-2/80">
+        {empty ? (
+          <div className="px-3 py-10 text-center">
+            <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-md bg-bg-3 text-text-3">
+              <Users size={18} strokeWidth={1.5} />
+            </div>
+            <div className="mb-3 text-xs text-text-4">No teams yet</div>
+            <button type="button" onClick={beginCreate}
+              className="df-lift inline-flex items-center gap-1.5 rounded-md border border-border-mid px-3 py-1.5 text-[11px] font-medium text-text-3 hover:border-accent-500 hover:text-accent-400">
+              <Plus size={12} strokeWidth={1.75} /><span>Create first team</span>
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-0.5 px-1">
+            {teams.map(renderRow)}
+            {creating && (
+              <div className="flex items-center gap-1.5 rounded-sm bg-bg-3 px-2 py-1.5">
+                <ChevronRight size={12} strokeWidth={1.75} aria-hidden className="text-accent-400" />
+                <input autoFocus aria-label="New team name" placeholder="Team name"
+                  value={draftName}
+                  onChange={(e) => setDraftName(e.target.value)}
+                  onBlur={() => { if (!draftName.trim()) cancelCreate() }}
+                  onKeyDown={onEnterEsc(() => void commitCreate(), cancelCreate)}
+                  className={`${INPUT_CLS} bg-bg-2`} />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <footer className="shrink-0 border-t border-border-soft p-1">
+        <button type="button"
+          onClick={() => (creating ? void commitCreate() : beginCreate())}
+          className="flex w-full items-center gap-1.5 rounded-sm px-2 py-1.5 text-left text-xs text-text-3 transition-colors hover:bg-bg-3 hover:text-accent-400">
+          <Plus size={12} strokeWidth={1.75} /><span>New Team</span>
+        </button>
+      </footer>
+
+      {menu && (
+        <ContextMenu x={menu.x} y={menu.y} items={buildMenuItems(menu.team)}
+          onDismiss={() => setMenu(null)} />
+      )}
+      {pendingDeleteTeam && (
+        <DeleteTeamModal team={pendingDeleteTeam} onClose={() => setPendingDeleteId(null)} />
+      )}
+    </aside>
+  )
+}
