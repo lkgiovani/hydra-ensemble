@@ -387,6 +387,25 @@ export interface PRCheck {
 // Renderer-facing API (exposed via contextBridge as window.api)
 // =============================================================================
 
+import type {
+  Agent,
+  MessageLog,
+  NewAgentInput,
+  NewEdgeInput,
+  NewTeamInput,
+  OrchestraEvent,
+  OrchestraResult,
+  OrchestraSettings,
+  ReportingEdge,
+  SafeMode,
+  SecretStorage,
+  SubmitTaskInput,
+  Task,
+  Team,
+  UpdateAgentInput,
+  UUID
+} from './orchestra'
+
 export interface HydraEnsembleApi {
   pty: {
     /** Spawn a raw PTY (no claude exec). Used by the Terminals panel for
@@ -514,6 +533,47 @@ export interface HydraEnsembleApi {
   }
   platform: {
     os: Platform
+  }
+  orchestra?: {
+    settings: {
+      get: () => Promise<OrchestraSettings>
+      set: (patch: Partial<OrchestraSettings>) => Promise<void>
+    }
+    team: {
+      list: () => Promise<Team[]>
+      create: (input: NewTeamInput) => Promise<OrchestraResult<Team>>
+      rename: (id: UUID, name: string) => Promise<OrchestraResult<Team>>
+      setSafeMode: (id: UUID, safeMode: SafeMode) => Promise<OrchestraResult<Team>>
+      delete: (id: UUID) => Promise<OrchestraResult<void>>
+    }
+    agent: {
+      list: (teamId: UUID) => Promise<Agent[]>
+      create: (input: NewAgentInput) => Promise<OrchestraResult<Agent>>
+      update: (input: UpdateAgentInput) => Promise<OrchestraResult<Agent>>
+      delete: (id: UUID) => Promise<OrchestraResult<void>>
+      promoteMain: (id: UUID) => Promise<OrchestraResult<Team>>
+      pause: (id: UUID) => Promise<OrchestraResult<Agent>>
+      stop: (id: UUID) => Promise<OrchestraResult<Agent>>
+    }
+    edge: {
+      list: (teamId: UUID) => Promise<ReportingEdge[]>
+      create: (input: NewEdgeInput) => Promise<OrchestraResult<ReportingEdge>>
+      delete: (id: UUID) => Promise<OrchestraResult<void>>
+    }
+    task: {
+      submit: (input: SubmitTaskInput) => Promise<OrchestraResult<Task>>
+      cancel: (id: UUID) => Promise<OrchestraResult<void>>
+      list: (teamId: UUID) => Promise<Task[]>
+    }
+    messageLog: {
+      forTask: (taskId: UUID) => Promise<MessageLog[]>
+    }
+    apiKey: {
+      set: (value: string, prefer: SecretStorage) => Promise<OrchestraResult<SecretStorage>>
+      test: () => Promise<{ ok: true } | { ok: false; error: string }>
+      clear: () => Promise<void>
+    }
+    onEvent: (handler: (event: OrchestraEvent) => void) => () => void
   }
 }
 

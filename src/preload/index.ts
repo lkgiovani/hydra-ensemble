@@ -25,6 +25,18 @@ import type {
   WatchdogRule,
   Worktree
 } from '../shared/types'
+import type {
+  NewAgentInput,
+  NewEdgeInput,
+  NewTeamInput,
+  OrchestraEvent,
+  OrchestraSettings,
+  SafeMode,
+  SecretStorage,
+  SubmitTaskInput,
+  UpdateAgentInput,
+  UUID
+} from '../shared/orchestra'
 
 function on<T>(channel: string, handler: (payload: T) => void): () => void {
   const listener = (_evt: unknown, payload: T): void => handler(payload)
@@ -156,6 +168,52 @@ const api: HydraEnsembleApi = {
   },
   platform: {
     os: process.platform as Platform
+  },
+  orchestra: {
+    settings: {
+      get: () => ipcRenderer.invoke('orchestra:settings.get'),
+      set: (patch: Partial<OrchestraSettings>) =>
+        ipcRenderer.invoke('orchestra:settings.set', patch)
+    },
+    team: {
+      list: () => ipcRenderer.invoke('orchestra:team.list'),
+      create: (input: NewTeamInput) => ipcRenderer.invoke('orchestra:team.create', input),
+      rename: (id: UUID, name: string) =>
+        ipcRenderer.invoke('orchestra:team.rename', { id, name }),
+      setSafeMode: (id: UUID, safeMode: SafeMode) =>
+        ipcRenderer.invoke('orchestra:team.setSafeMode', { id, safeMode }),
+      delete: (id: UUID) => ipcRenderer.invoke('orchestra:team.delete', { id })
+    },
+    agent: {
+      list: (teamId: UUID) => ipcRenderer.invoke('orchestra:agent.list', { teamId }),
+      create: (input: NewAgentInput) => ipcRenderer.invoke('orchestra:agent.create', input),
+      update: (input: UpdateAgentInput) => ipcRenderer.invoke('orchestra:agent.update', input),
+      delete: (id: UUID) => ipcRenderer.invoke('orchestra:agent.delete', { id }),
+      promoteMain: (id: UUID) => ipcRenderer.invoke('orchestra:agent.promoteMain', { id }),
+      pause: (id: UUID) => ipcRenderer.invoke('orchestra:agent.pause', { id }),
+      stop: (id: UUID) => ipcRenderer.invoke('orchestra:agent.stop', { id })
+    },
+    edge: {
+      list: (teamId: UUID) => ipcRenderer.invoke('orchestra:edge.list', { teamId }),
+      create: (input: NewEdgeInput) => ipcRenderer.invoke('orchestra:edge.create', input),
+      delete: (id: UUID) => ipcRenderer.invoke('orchestra:edge.delete', { id })
+    },
+    task: {
+      submit: (input: SubmitTaskInput) => ipcRenderer.invoke('orchestra:task.submit', input),
+      cancel: (id: UUID) => ipcRenderer.invoke('orchestra:task.cancel', { id }),
+      list: (teamId: UUID) => ipcRenderer.invoke('orchestra:task.list', { teamId })
+    },
+    messageLog: {
+      forTask: (taskId: UUID) =>
+        ipcRenderer.invoke('orchestra:messageLog.forTask', { taskId })
+    },
+    apiKey: {
+      set: (value: string, prefer: SecretStorage) =>
+        ipcRenderer.invoke('orchestra:apiKey.set', { value, prefer }),
+      test: () => ipcRenderer.invoke('orchestra:apiKey.test'),
+      clear: () => ipcRenderer.invoke('orchestra:apiKey.clear')
+    },
+    onEvent: (handler) => on<OrchestraEvent>('orchestra:event', handler)
   }
 }
 

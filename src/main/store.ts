@@ -2,6 +2,10 @@ import { app } from 'electron'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { SessionMeta, ToolkitItem, WatchdogRule } from '../shared/types'
+import {
+  DEFAULT_ORCHESTRA_STATE,
+  type OrchestraStoreSlice
+} from '../shared/orchestra'
 
 export type { ToolkitItem } from '../shared/types'
 
@@ -16,13 +20,15 @@ interface StoreShape {
   projects: SavedProject[]
   toolkit: ToolkitItem[]
   watchdogs: WatchdogRule[]
+  orchestra: OrchestraStoreSlice
 }
 
 const DEFAULTS: StoreShape = {
   sessions: [],
   projects: [],
   toolkit: [],
-  watchdogs: []
+  watchdogs: [],
+  orchestra: DEFAULT_ORCHESTRA_STATE
 }
 
 let cachePath: string | null = null
@@ -40,7 +46,11 @@ export function initStore(): void {
         sessions: parsed.sessions ?? [],
         projects: parsed.projects ?? [],
         toolkit: parsed.toolkit ?? [],
-        watchdogs: parsed.watchdogs ?? []
+        watchdogs: parsed.watchdogs ?? [],
+        orchestra: {
+          ...DEFAULT_ORCHESTRA_STATE,
+          ...(parsed.orchestra ?? {})
+        }
       }
     } catch {
       cache = { ...DEFAULTS }
