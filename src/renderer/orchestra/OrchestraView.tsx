@@ -52,6 +52,7 @@ import {
   ORCHESTRA_EVENTS,
   onOrchestraEvent
 } from './useOrchestraKeybinds'
+import { Kbd } from '../ui'
 
 interface Props {
   onBackToClassic: () => void
@@ -604,7 +605,7 @@ function CanvasGhostState() {
         <Plus size={28} strokeWidth={1.25} className="text-text-4" />
         <div className="text-sm text-text-2">No agents yet</div>
         <div className="font-mono text-[11px] text-text-4">
-          Double-click the canvas, press <kbd className="rounded-sm border border-border-soft bg-bg-3 px-1 py-0.5 text-[10px] text-text-2">A</kbd>, or click
+          Double-click the canvas, press <Kbd>A</Kbd>, or click
           <span className="mx-1 inline-flex items-center gap-1 rounded-sm border border-accent-500/40 bg-accent-500/10 px-1.5 py-0.5 text-accent-400">
             <Plus size={10} strokeWidth={1.75} />New agent
           </span>

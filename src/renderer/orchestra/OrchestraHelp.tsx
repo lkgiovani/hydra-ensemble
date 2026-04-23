@@ -9,6 +9,7 @@
  */
 import { HelpCircle } from 'lucide-react'
 import Modal from '../ui/Modal'
+import { Kbd } from '../ui'
 import { fmtShortcut } from '../lib/platform'
 
 interface Props {
@@ -73,14 +74,6 @@ const WHERE: ReadonlyArray<{ label: string; body: string }> = [
   { label: 'Bottom-left toolbar', body: 'Fit · Auto-layout · Templates.' },
   { label: 'Bottom-right FABs', body: '+ Agent · + Task.' }
 ]
-
-function Kbd({ children }: { children: React.ReactNode }) {
-  return (
-    <kbd className="rounded-sm border border-border-mid bg-bg-3 px-1 py-0.5 font-mono text-[10px]">
-      {children}
-    </kbd>
-  )
-}
 
 /** Render a list of keys separated by `/` so platform-specific variants
  *  (Cmd vs Ctrl) are visually grouped without splitting onto new lines. */

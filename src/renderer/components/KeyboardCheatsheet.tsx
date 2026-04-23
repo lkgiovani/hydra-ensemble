@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Keyboard, PlayCircle, Search, X } from 'lucide-react'
 import { ACTIONS, allBindings, useKeybinds } from '../state/keybinds'
 import { formatCombo } from '../lib/keybind'
+import { Kbd } from '../ui'
 
 interface Props {
   open: boolean
@@ -335,8 +336,8 @@ export default function KeyboardCheatsheet({ open, onClose }: Props) {
             view tour
           </button>
           <span>
-            press <kbd className="mx-1 rounded-sm bg-bg-3 px-1 text-text-3">?</kbd> or{' '}
-            <kbd className="mx-1 rounded-sm bg-bg-3 px-1 text-text-3">Esc</kbd> to close
+            press <span className="mx-1"><Kbd>?</Kbd></span> or{' '}
+            <span className="mx-1"><Kbd>Esc</Kbd></span> to close
           </span>
         </footer>
       </div>
