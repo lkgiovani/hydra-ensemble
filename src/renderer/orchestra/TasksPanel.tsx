@@ -91,6 +91,24 @@ export default function TasksPanel() {
     [teamTasks]
   )
 
+  // The prominent "New task" button is only actionable when the active team
+  // has at least one agent — otherwise auto-routing and direct assignment are
+  // both impossible. We keep the flag local so the tooltip and the disabled
+  // styling stay in sync.
+  const teamHasAgents = useMemo(
+    () =>
+      activeTeamId
+        ? agents.some((a) => a.teamId === activeTeamId)
+        : false,
+    [agents, activeTeamId]
+  )
+  const canCreateTask = Boolean(activeTeamId) && teamHasAgents
+  const createDisabledReason = !activeTeamId
+    ? 'Select a team first'
+    : !teamHasAgents
+      ? 'Create a team with at least one agent first'
+      : 'Create a new task'
+
   const resolveAssigneeName = (t: Task): string | null => {
     if (t.assignedAgentId) {
       return agentNameById.get(t.assignedAgentId) ?? null
@@ -108,21 +126,41 @@ export default function TasksPanel() {
       data-coach="tasks-panel"
       className="flex h-full w-full flex-col overflow-hidden border-l border-border-soft bg-bg-2 text-text-1"
     >
-      {/* Header */}
+      {/* Header — label + secondary icon-only shortcut. The primary CTA
+          lives just below so the user always has a full-width target. */}
       <header className="flex items-center justify-between border-b border-border-soft bg-bg-1 px-3 py-2">
         <span className="df-label">tasks</span>
         <button
           type="button"
           onClick={() => setDialogOpen(true)}
-          disabled={!activeTeamId}
-          className="flex h-6 items-center gap-1 rounded-sm border border-accent-600 bg-accent-500/90 px-2 font-mono text-[10px] font-semibold text-bg-0 hover:bg-accent-500 disabled:cursor-not-allowed disabled:border-border-soft disabled:bg-bg-3 disabled:text-text-4"
-          title={activeTeamId ? 'Create a new task' : 'Select a team first'}
+          disabled={!canCreateTask}
+          className="flex h-5 w-5 items-center justify-center rounded-sm border border-border-soft bg-bg-2 text-text-3 hover:border-border-mid hover:bg-bg-3 hover:text-text-1 disabled:cursor-not-allowed disabled:opacity-50"
+          title={createDisabledReason}
           aria-label="New task"
         >
-          <Plus size={10} strokeWidth={2} />
-          New Task
+          <Plus size={12} strokeWidth={2} />
         </button>
       </header>
+
+      {/* Primary CTA — full-width accent button so "create a task" is the
+          dominant affordance of the panel. Disabled + tooltipped when the
+          active team has no agents to route/assign the task to. */}
+      <div className="flex flex-col gap-1 border-b border-border-soft bg-bg-1 px-3 pb-2 pt-2">
+        <button
+          type="button"
+          onClick={() => setDialogOpen(true)}
+          disabled={!canCreateTask}
+          title={createDisabledReason}
+          aria-label="New task"
+          className="flex h-9 w-full items-center justify-center gap-1.5 rounded-sm bg-accent-500 font-mono text-[12px] font-semibold text-white transition hover:bg-accent-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-400 focus-visible:ring-offset-2 focus-visible:ring-offset-bg-2 disabled:cursor-not-allowed disabled:bg-bg-3 disabled:text-text-4 disabled:hover:bg-bg-3"
+        >
+          <Plus size={14} strokeWidth={2.25} />
+          New task
+        </button>
+        <span className="font-mono text-[10px] text-text-4">
+          Assign to anyone in the team — Auto-route lets Orchestra pick.
+        </span>
+      </div>
 
       {/* Filter chips */}
       <div className="flex items-center gap-1 border-b border-border-soft bg-bg-1 px-3 py-1.5">

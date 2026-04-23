@@ -7,6 +7,8 @@ import RuntimeTab from './RuntimeTab'
 import SoulTab from './SoulTab'
 import SkillsTab from './SkillsTab'
 import TriggersTab from './TriggersTab'
+import InboxTab from './InboxTab'
+import ConsoleTab from './ConsoleTab'
 
 /**
  * Right-hand Inspector drawer for a single selected agent.
@@ -16,14 +18,23 @@ import TriggersTab from './TriggersTab'
  * (multi-select gets a different affordance on the canvas, not here).
  */
 
-type TabKey = 'identity' | 'soul' | 'skills' | 'triggers' | 'runtime'
+type TabKey =
+  | 'identity'
+  | 'soul'
+  | 'skills'
+  | 'triggers'
+  | 'inbox'
+  | 'runtime'
+  | 'console'
 
 const TABS: ReadonlyArray<{ key: TabKey; label: string }> = [
   { key: 'identity', label: 'identity' },
   { key: 'soul', label: 'soul' },
   { key: 'skills', label: 'skills' },
   { key: 'triggers', label: 'triggers' },
-  { key: 'runtime', label: 'runtime' }
+  { key: 'inbox', label: 'inbox' },
+  { key: 'runtime', label: 'runtime' },
+  { key: 'console', label: 'console' }
 ]
 
 export default function Inspector() {
@@ -131,7 +142,9 @@ export default function Inspector() {
             {activeTab === 'soul' && <SoulTab agentId={agent.id} />}
             {activeTab === 'skills' && <SkillsTab agentId={agent.id} />}
             {activeTab === 'triggers' && <TriggersTab agentId={agent.id} />}
+            {activeTab === 'inbox' && <InboxTab agent={agent} />}
             {activeTab === 'runtime' && <RuntimeTab agent={agent} />}
+            {activeTab === 'console' && <ConsoleTab agent={agent} />}
           </div>
         </>
       ) : null}

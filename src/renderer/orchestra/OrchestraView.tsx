@@ -14,8 +14,10 @@ import { useOrchestra } from './state/orchestra'
 import TeamRail from './TeamRail'
 import Canvas from './Canvas'
 import Inspector from './Inspector'
-import TaskBar from './TaskBar'
-import TasksPanel from './TasksPanel'
+import SidePanels from './SidePanels'
+import TeamOverview from './TeamOverview'
+import CanvasFabs from './CanvasFabs'
+import CanvasToolbar from './CanvasToolbar'
 import ApiKeyModal from './modals/ApiKeyModal'
 import SettingsPanel from './SettingsPanel'
 import CoachMarks from './CoachMarks'
@@ -210,25 +212,31 @@ export default function OrchestraView({ onBackToClassic }: Props) {
               {activeTeam && activeAgents.length === 0 ? (
                 <CanvasGhostState />
               ) : null}
+              {/* Live counters + active-task chips pinned to the top. */}
+              <TeamOverview />
+              {/* Bottom-left toolbar (fit-view, auto-layout, templates). */}
+              <CanvasToolbar />
+              {/* Bottom-right FABs (new agent, new task). */}
+              <CanvasFabs />
             </>
           )}
         </main>
 
-        {/* Right column: Tasks list always visible when a team is active;
-            Inspector slides over it when an agent is selected. The Inspector
-            is already a fixed-position drawer so it layers on top naturally. */}
+        {/* Right column: tabbed side panels (Tasks · History · Changes ·
+            Activity + BudgetMeter footer). Inspector is a fixed-position
+            drawer that layers on top when an agent is selected. */}
         {activeTeam ? (
           <aside className="flex w-[340px] shrink-0 flex-col border-l border-border-soft bg-bg-2">
-            <TasksPanel />
+            <SidePanels />
           </aside>
         ) : null}
         {inspectorOpen ? <Inspector /> : null}
       </div>
 
-      {/* Bottom task bar (52px). Disabled visually is owned by TaskBar itself. */}
-      <footer className="flex h-[52px] shrink-0 items-center border-t border-border-soft bg-bg-2 px-3">
-        <TaskBar />
-      </footer>
+      {/* Bottom bar removed — task submission lives in the right-side
+          TasksPanel now (see §25 in PRD.md for the updated flow). The
+          previous quick-submit strip was confusing because it looked like
+          a chat for the whole canvas. */}
 
       {/* Coach marks overlay — always mounted while Orchestra is visible;
           the component decides its own visibility via the store. */}

@@ -1,6 +1,48 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertCircle, Loader2, Plus, Trash2 } from 'lucide-react'
+import { AlertCircle, Loader2, Plus, Sparkles, Trash2 } from 'lucide-react'
 import type { Skill } from '../../../shared/orchestra'
+import { useOrchestra } from '../state/orchestra'
+
+/** Starter skill bundles keyed by a loose match on the agent role. Picked
+ *  to cover the 80% roles the starter agent presets surface. Hitting
+ *  "Quick add" appends whichever bundle best fits the current role (or
+ *  the "generic" one if nothing matches). De-duped by `name` when merged
+ *  so reapplying on an already-populated agent doesn't create clones. */
+const QUICK_BUNDLES: Record<string, Skill[]> = {
+  reviewer: [
+    { name: 'code-review', tags: ['review', 'pr'], weight: 1.5, description: 'Reviews pull requests for style, correctness, and test coverage.' },
+    { name: 'go-lint', tags: ['go', 'lint'], weight: 1.0, description: 'Catches idiomatic Go issues and lint violations.' },
+    { name: 'security-audit', tags: ['security', 'audit'], weight: 1.2, description: 'Flags unsafe patterns (SQLi, unchecked user input, exposed secrets).' }
+  ],
+  dev: [
+    { name: 'implementation', tags: ['feature', 'code'], weight: 1.5, description: 'Writes new features end-to-end with tests.' },
+    { name: 'debugging', tags: ['bug', 'fix'], weight: 1.2, description: 'Investigates and fixes defects.' },
+    { name: 'refactor', tags: ['refactor'], weight: 1.0, description: 'Restructures existing code without changing behavior.' }
+  ],
+  qa: [
+    { name: 'test-writing', tags: ['test', 'qa'], weight: 1.5, description: 'Writes unit + integration tests to cover new surface.' },
+    { name: 'repro-steps', tags: ['repro', 'bug'], weight: 1.2, description: 'Turns vague reports into deterministic reproductions.' },
+    { name: 'e2e-smoke', tags: ['e2e', 'smoke'], weight: 1.0, description: 'Runs smoke tests against the full stack.' }
+  ],
+  pm: [
+    { name: 'scoping', tags: ['scope', 'plan'], weight: 1.5, description: 'Breaks features into shippable slices with clear acceptance.' },
+    { name: 'delegation', tags: ['route', 'handoff'], weight: 1.3, description: 'Routes work to the right specialist on the team.' },
+    { name: 'status-updates', tags: ['status'], weight: 1.0, description: 'Summarizes progress for stakeholders.' }
+  ],
+  generic: [
+    { name: 'analysis', tags: ['analysis'], weight: 1.0, description: 'Investigates a problem and documents findings.' },
+    { name: 'writing', tags: ['docs', 'writing'], weight: 1.0, description: 'Writes clear documentation or summaries.' }
+  ]
+}
+
+function bundleForRole(role: string | undefined): { key: string; skills: Skill[] } {
+  const r = (role ?? '').toLowerCase()
+  if (r.includes('review')) return { key: 'reviewer', skills: QUICK_BUNDLES.reviewer! }
+  if (r.includes('qa') || r.includes('test')) return { key: 'qa', skills: QUICK_BUNDLES.qa! }
+  if (r.includes('pm') || r.includes('manager') || r.includes('lead')) return { key: 'pm', skills: QUICK_BUNDLES.pm! }
+  if (r.includes('dev') || r.includes('engineer')) return { key: 'dev', skills: QUICK_BUNDLES.dev! }
+  return { key: 'generic', skills: QUICK_BUNDLES.generic! }
+}
 
 interface Props {
   agentId: string
@@ -73,6 +115,12 @@ export default function SkillsTab({ agentId }: Props) {
   const [tagDrafts, setTagDrafts] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
   const [savedAt, setSavedAt] = useState<number | null>(null)
+
+  // Look up the role off the current agent so "Quick add" suggests the
+  // right bundle (reviewer/dev/qa/pm). Pulled from the store directly so
+  // the button stays live if the user edits the role in Identity.
+  const agents = useOrchestra((s) => s.agents)
+  const agentRole = agents.find((a) => a.id === agentId)?.role
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastLoadedAgentRef = useRef<string | null>(null)
@@ -166,6 +214,23 @@ export default function SkillsTab({ agentId }: Props) {
     },
     [scheduleSave]
   )
+
+  const quickAddBundle = (): void => {
+    const { skills: bundle } = bundleForRole(agentRole)
+    setSkills((prev) => {
+      const known = new Set(prev.map((s) => s.name))
+      const merged = [...prev, ...bundle.filter((s) => !known.has(s.name))]
+      scheduleSave(merged)
+      return merged
+    })
+    setTagDrafts((prev) => {
+      const existingNames = new Set(skills.map((s) => s.name))
+      const added = bundleForRole(agentRole).skills.filter(
+        (s) => !existingNames.has(s.name)
+      )
+      return [...prev, ...added.map((s) => tagsToInput(s.tags))]
+    })
+  }
 
   const addSkill = (): void => {
     setSkills((prev) => {
@@ -320,7 +385,7 @@ export default function SkillsTab({ agentId }: Props) {
         )}
       </div>
 
-      <div className="border-t border-border-soft bg-bg-1 px-3 py-2">
+      <div className="flex items-center gap-2 border-t border-border-soft bg-bg-1 px-3 py-2">
         <button
           type="button"
           onClick={addSkill}
@@ -329,6 +394,16 @@ export default function SkillsTab({ agentId }: Props) {
         >
           <Plus size={12} strokeWidth={1.75} />
           <span>Add skill</span>
+        </button>
+        <button
+          type="button"
+          onClick={quickAddBundle}
+          disabled={!editable}
+          title={`Add starter skills for "${agentRole || 'generic'}" role`}
+          className="flex items-center gap-1.5 rounded-sm border border-accent-500/30 bg-accent-500/10 px-2.5 py-1.5 text-[11px] text-accent-400 hover:border-accent-500/60 hover:text-accent-400 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <Sparkles size={12} strokeWidth={1.75} />
+          <span>Quick add: {bundleForRole(agentRole).key}</span>
         </button>
       </div>
     </div>

@@ -121,11 +121,32 @@ function AgentCardImpl(props: NodeProps<AgentNode>) {
     [commit, cancel]
   )
 
-  // Active delegation sub-status is populated elsewhere (runtime tab +
-  // delegate tool flow). For now we surface the agent's free-form status
-  // if it later lands on `agent.description`-like fields; keeping it
-  // inline so PRD §11 sub-status line is ready to bind.
-  const subStatus: string | null = null
+  // Live activity: what this agent is working on right now, and the
+  // latest "status" or "output" line it produced. Picked straight from
+  // the store so the card animates in sync with the timeline.
+  const tasks = useOrchestra((s) => s.tasks)
+  const messageLog = useOrchestra((s) => s.messageLog)
+  const setTaskDrawer = useOrchestra((s) => s.setTaskDrawer)
+  const currentTask = tasks.find(
+    (t) =>
+      t.assignedAgentId === agent.id &&
+      (t.status === 'in_progress' || t.status === 'routing' || t.status === 'blocked')
+  )
+  const latestLine = (() => {
+    for (let i = messageLog.length - 1; i >= 0; i--) {
+      const m = messageLog[i]
+      if (!m) continue
+      if (m.fromAgentId !== agent.id) continue
+      if (m.kind !== 'status' && m.kind !== 'output') continue
+      return m.content
+    }
+    return null
+  })()
+  const subStatus: string | null = currentTask
+    ? `on "${currentTask.title}"`
+    : latestLine
+      ? latestLine.slice(0, 72)
+      : null
 
   const ringColor = agent.color ?? 'var(--color-accent-500)'
 
@@ -242,9 +263,18 @@ function AgentCardImpl(props: NodeProps<AgentNode>) {
       </div>
 
       {subStatus ? (
-        <div className="truncate px-3 pb-2 text-[11px] text-[var(--color-text-3)]">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            if (currentTask) setTaskDrawer(currentTask.id)
+          }}
+          className="block w-full truncate px-3 pb-2 text-left text-[11px] text-[var(--color-text-3)] hover:text-[var(--color-text-1)] disabled:cursor-default"
+          disabled={!currentTask}
+          title={currentTask ? 'Open task timeline' : subStatus}
+        >
           {subStatus}
-        </div>
+        </button>
       ) : null}
 
       {(managerAgent || subordinateCount > 0) ? (
