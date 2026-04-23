@@ -9,7 +9,7 @@
  * See PRD.md §11 (UI layout), §13 (empty states) and PLAN.md §5.1.
  */
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, Crown, Network, Plus, Settings } from 'lucide-react'
+import { ArrowLeft, Crown, Network, Plus, Settings, Activity } from 'lucide-react'
 import { useOrchestra } from './state/orchestra'
 import TeamRail from './TeamRail'
 import Canvas from './Canvas'
@@ -22,6 +22,17 @@ import ApiKeyModal from './modals/ApiKeyModal'
 import SettingsPanel from './SettingsPanel'
 import CoachMarks from './CoachMarks'
 import TaskDrawer from './TaskDrawer'
+import OrchestraHelp from './OrchestraHelp'
+import OrchestraSearch from './OrchestraSearch'
+import NotificationsBell from './NotificationsBell'
+import TeamHealthPanel from './TeamHealthPanel'
+import AgentWizard from './modals/AgentWizard'
+import NewTaskDialog from './modals/NewTaskDialog'
+import {
+  useOrchestraKeybinds,
+  ORCHESTRA_EVENTS,
+  onOrchestraEvent
+} from './useOrchestraKeybinds'
 
 interface Props {
   onBackToClassic: () => void
@@ -89,6 +100,28 @@ export default function OrchestraView({ onBackToClassic }: Props) {
     null
   )
   const [settingsOpen, setSettingsOpen] = useState<boolean>(false)
+  const [helpOpen, setHelpOpen] = useState<boolean>(false)
+  const [searchOpen, setSearchOpen] = useState<boolean>(false)
+  const [healthOpen, setHealthOpen] = useState<boolean>(false)
+  const [wizardOpen, setWizardOpen] = useState<boolean>(false)
+  const [newTaskOpen, setNewTaskOpen] = useState<boolean>(false)
+
+  // Register Orchestra-wide keyboard shortcuts. Each shortcut dispatches
+  // a custom window event; subscribers below translate into setOpen() calls.
+  useOrchestraKeybinds()
+  useEffect(() => {
+    const offs = [
+      onOrchestraEvent(ORCHESTRA_EVENTS.help, () => setHelpOpen((v) => !v)),
+      onOrchestraEvent(ORCHESTRA_EVENTS.search, () => setSearchOpen((v) => !v)),
+      onOrchestraEvent(ORCHESTRA_EVENTS.settings, () => setSettingsOpen((v) => !v)),
+      onOrchestraEvent(ORCHESTRA_EVENTS.newTask, () => setNewTaskOpen(true)),
+      onOrchestraEvent(ORCHESTRA_EVENTS.newAgentWizard, () => setWizardOpen(true)),
+      onOrchestraEvent(ORCHESTRA_EVENTS.healthToggle, () => setHealthOpen((v) => !v))
+    ]
+    return () => {
+      for (const off of offs) off()
+    }
+  }, [])
 
   // One-shot init + API-key probe. Guarded by `enabled` so disabled mounts
   // never kick off side effects.
@@ -177,11 +210,23 @@ export default function OrchestraView({ onBackToClassic }: Props) {
               {activeAgents.length} {activeAgents.length === 1 ? 'agent' : 'agents'}
             </span>
           ) : null}
+          {activeTeam ? (
+            <button
+              type="button"
+              onClick={() => setHealthOpen(true)}
+              className="flex items-center gap-1 rounded-sm px-1.5 py-1 text-text-3 hover:bg-bg-3 hover:text-text-1"
+              title="Team health · Ctrl+B"
+              aria-label="Team health"
+            >
+              <Activity size={14} strokeWidth={1.75} />
+            </button>
+          ) : null}
+          <NotificationsBell />
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}
             className="flex items-center gap-1 rounded-sm px-1.5 py-1 text-text-3 hover:bg-bg-3 hover:text-text-1"
-            title="Orchestra settings"
+            title="Orchestra settings · Ctrl+,"
             aria-label="Orchestra settings"
           >
             <Settings size={14} strokeWidth={1.75} />
@@ -249,8 +294,34 @@ export default function OrchestraView({ onBackToClassic }: Props) {
         onClose={() => useOrchestra.getState().setTaskDrawer(null)}
       />
 
-      {/* Orchestra settings panel (gear icon in header). */}
+      {/* Orchestra settings panel (gear icon + Ctrl+,). */}
       <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+
+      {/* Help overlay (? key). */}
+      <OrchestraHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
+
+      {/* Global search palette (Ctrl+P). */}
+      <OrchestraSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
+
+      {/* Team health dashboard (Activity button in header + Ctrl+B). */}
+      <TeamHealthPanel open={healthOpen} onClose={() => setHealthOpen(false)} />
+
+      {/* Agent creation wizard (Ctrl+Shift+K). Falls back to canvas center
+          as the spawn position since the wizard isn't cursor-anchored. */}
+      {activeTeamId ? (
+        <AgentWizard
+          open={wizardOpen}
+          onClose={() => setWizardOpen(false)}
+          teamId={activeTeamId}
+          position={{
+            x: Math.round((typeof window !== 'undefined' ? window.innerWidth / 2 : 400) / 16) * 16,
+            y: Math.round((typeof window !== 'undefined' ? window.innerHeight / 2 : 300) / 16) * 16
+          }}
+        />
+      ) : null}
+
+      {/* New task dialog (Ctrl+Shift+N). */}
+      <NewTaskDialog open={newTaskOpen} onClose={() => setNewTaskOpen(false)} />
 
       {/* Blocking API-key modal. Rendered last so it layers above everything. */}
       {apiKeyResolved && apiKeyMissing ? (

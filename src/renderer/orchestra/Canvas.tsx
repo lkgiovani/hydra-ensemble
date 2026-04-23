@@ -424,6 +424,17 @@ function CanvasInner() {
     return () => window.removeEventListener('keydown', onKey)
   }, [selectedAgentIds, deleteAgent, clearSelection, openPopoverCenter, fitView])
 
+  // CanvasToolbar lives outside the ReactFlowProvider, so it can't call
+  // `useReactFlow().fitView` directly. It dispatches this custom event
+  // and we bridge the call here.
+  useEffect(() => {
+    const onFitRequest = (): void => {
+      fitView({ duration: 200 })
+    }
+    window.addEventListener('orchestra:fit-view', onFitRequest)
+    return () => window.removeEventListener('orchestra:fit-view', onFitRequest)
+  }, [fitView])
+
   // ------------------------------------------------------------------------
   // Type registration — memoised so react-flow does not remount nodes/edges
   // on every parent render. This is called out in the react-flow docs and

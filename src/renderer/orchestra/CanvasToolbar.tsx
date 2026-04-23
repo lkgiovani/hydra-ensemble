@@ -12,7 +12,9 @@
  */
 import { useCallback, useMemo, useState } from 'react'
 import { Maximize2, Network, Wand2 } from 'lucide-react'
-import { useReactFlow } from '@xyflow/react'
+// Do NOT import `useReactFlow` here — this component is mounted by
+// OrchestraView OUTSIDE the ReactFlowProvider that Canvas owns. We ask
+// the Canvas to fit-view via a custom window event instead.
 import type { Agent, ReportingEdge, UUID } from '../../shared/orchestra'
 import { useOrchestra } from './state/orchestra'
 import TeamTemplatesDialog from './TeamTemplatesDialog'
@@ -25,7 +27,6 @@ const LAYOUT_X_STEP = 260
 const LAYOUT_Y_STEP = 200
 
 export default function CanvasToolbar(_props: Props) {
-  const { fitView } = useReactFlow()
   const activeTeamId = useOrchestra((s) => s.activeTeamId)
   const agents = useOrchestra((s) => s.agents)
   const edges = useOrchestra((s) => s.edges)
@@ -47,8 +48,8 @@ export default function CanvasToolbar(_props: Props) {
   const hasGraph = teamAgents.length > 0
 
   const onFit = useCallback((): void => {
-    fitView({ duration: 200 })
-  }, [fitView])
+    window.dispatchEvent(new CustomEvent('orchestra:fit-view'))
+  }, [])
 
   const onAutoLayout = useCallback(async (): Promise<void> => {
     if (!hasGraph) return

@@ -9,6 +9,7 @@ import SkillsTab from './SkillsTab'
 import TriggersTab from './TriggersTab'
 import InboxTab from './InboxTab'
 import ConsoleTab from './ConsoleTab'
+import PromptTab from './PromptTab'
 
 /**
  * Right-hand Inspector drawer for a single selected agent.
@@ -23,6 +24,7 @@ type TabKey =
   | 'soul'
   | 'skills'
   | 'triggers'
+  | 'prompt'
   | 'inbox'
   | 'runtime'
   | 'console'
@@ -32,6 +34,7 @@ const TABS: ReadonlyArray<{ key: TabKey; label: string }> = [
   { key: 'soul', label: 'soul' },
   { key: 'skills', label: 'skills' },
   { key: 'triggers', label: 'triggers' },
+  { key: 'prompt', label: 'prompt' },
   { key: 'inbox', label: 'inbox' },
   { key: 'runtime', label: 'runtime' },
   { key: 'console', label: 'console' }
@@ -142,6 +145,7 @@ export default function Inspector() {
             {activeTab === 'soul' && <SoulTab agentId={agent.id} />}
             {activeTab === 'skills' && <SkillsTab agentId={agent.id} />}
             {activeTab === 'triggers' && <TriggersTab agentId={agent.id} />}
+            {activeTab === 'prompt' && <PromptTab agent={agent} />}
             {activeTab === 'inbox' && <InboxTab agent={agent} />}
             {activeTab === 'runtime' && <RuntimeTab agent={agent} />}
             {activeTab === 'console' && <ConsoleTab agent={agent} />}
