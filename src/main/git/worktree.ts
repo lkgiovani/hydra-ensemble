@@ -223,7 +223,12 @@ export class WorktreeService {
     filePath?: string,
     staged: boolean = false
   ): Promise<GitOpResult<string>> {
-    const args = ['-C', cwd, 'diff', '--no-color']
+    // Run diff from the repo toplevel too — the pathspec we receive
+    // was produced by `git status --porcelain` (toplevel-relative), so
+    // passing it to `git -C <subdir>` double-prefixes the same way
+    // stageFiles did.
+    const root = await this.toplevelOr(cwd)
+    const args = ['-C', root, 'diff', '--no-color']
     if (staged) args.push('--cached')
     if (filePath !== undefined && filePath.length > 0) {
       args.push('--', filePath)
@@ -235,9 +240,9 @@ export class WorktreeService {
     // Untracked + no staged diff: synthesise by showing the file content
     // against /dev/null so the UI can still render a preview.
     if (!staged && res.stdout.length === 0 && filePath !== undefined) {
-      const ls = await this.runGit(['-C', cwd, 'ls-files', '--others', '--exclude-standard', '--', filePath])
+      const ls = await this.runGit(['-C', root, 'ls-files', '--others', '--exclude-standard', '--', filePath])
       if (ls.code === 0 && ls.stdout.trim().length > 0) {
-        const show = await this.runGit(['-C', cwd, 'diff', '--no-color', '--no-index', '/dev/null', filePath])
+        const show = await this.runGit(['-C', root, 'diff', '--no-color', '--no-index', '/dev/null', filePath])
         // --no-index always returns 1 on differences; treat that as success.
         if (show.stdout.length > 0) {
           return { ok: true, value: cap(show.stdout) }
@@ -247,9 +252,25 @@ export class WorktreeService {
     return { ok: true, value: cap(res.stdout) }
   }
 
+  /** Resolve the repo's toplevel — `listChangedFiles` returns paths
+   *  relative to the toplevel (that's what `git status --porcelain`
+   *  emits), so stage/unstage/commit/diff must ALSO run with `-C
+   *  <toplevel>` or else a caller whose `cwd` is a subdir of the repo
+   *  root will hit "pathspec did not match" because git tries to stat
+   *  `<cwd>/<path>` and gets a double-prefixed path.
+   *  Falls back to the original cwd when `rev-parse` fails so non-repo
+   *  callers still get a sensible error from the downstream command. */
+  private async toplevelOr(cwd: string): Promise<string> {
+    const res = await this.runGit(['-C', cwd, 'rev-parse', '--show-toplevel'])
+    if (res.code !== 0) return cwd
+    const top = res.stdout.trim()
+    return top.length > 0 ? top : cwd
+  }
+
   /** `git add -- <path>...` — stages the given files (or the whole tree if empty). */
   async stageFiles(cwd: string, paths: string[]): Promise<GitOpResult> {
-    const args = ['-C', cwd, 'add', '--']
+    const root = await this.toplevelOr(cwd)
+    const args = ['-C', root, 'add', '--']
     if (paths.length === 0) {
       args.pop()
       args.push('-A')
@@ -265,7 +286,8 @@ export class WorktreeService {
 
   /** `git reset HEAD -- <path>...` — unstages the given files. */
   async unstageFiles(cwd: string, paths: string[]): Promise<GitOpResult> {
-    const args = ['-C', cwd, 'reset', 'HEAD', '--', ...paths]
+    const root = await this.toplevelOr(cwd)
+    const args = ['-C', root, 'reset', 'HEAD', '--', ...paths]
     const res = await this.runGit(args)
     if (res.code !== 0) {
       return { ok: false, error: res.stderr.trim() || 'git reset failed' }
@@ -281,11 +303,12 @@ export class WorktreeService {
     if (message.trim().length === 0) {
       return { ok: false, error: 'commit message cannot be empty' }
     }
-    const res = await this.runGit(['-C', cwd, 'commit', '-F', '-'], { stdin: message })
+    const root = await this.toplevelOr(cwd)
+    const res = await this.runGit(['-C', root, 'commit', '-F', '-'], { stdin: message })
     if (res.code !== 0) {
       return { ok: false, error: res.stderr.trim() || res.stdout.trim() || 'git commit failed' }
     }
-    const sha = await this.runGit(['-C', cwd, 'rev-parse', 'HEAD'])
+    const sha = await this.runGit(['-C', root, 'rev-parse', 'HEAD'])
     return { ok: true, value: { sha: sha.stdout.trim() } }
   }
 

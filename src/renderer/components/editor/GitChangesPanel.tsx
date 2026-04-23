@@ -692,9 +692,13 @@ export default function GitChangesPanel({ cwd }: Props) {
             <button
               type="button"
               onClick={() => void onGenerate()}
-              disabled={generating}
+              disabled={generating || files.length === 0}
               className="flex items-center gap-1 rounded-sm border border-accent-500/40 bg-accent-500/10 px-2 py-0.5 font-mono text-[10px] text-accent-200 transition hover:bg-accent-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-              title="Generate with Claude"
+              title={
+                files.length === 0
+                  ? 'No changes to describe — stage or modify files first'
+                  : 'Generate with Claude'
+              }
             >
               {generating ? (
                 <Loader2 size={10} strokeWidth={1.75} className="animate-spin" />
