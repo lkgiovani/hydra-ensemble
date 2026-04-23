@@ -116,6 +116,14 @@ const api = (): NonNullable<Window['api']['orchestra']> | null => {
   return o ?? null
 }
 
+// Module-level guard so concurrent init callers (App.tsx AND
+// OrchestraView.tsx both call init() on mount) don't race past the
+// `initialized` flip and each subscribe another onEvent listener. In
+// strict-mode dev double-mount each messageLog.appended event was
+// duplicated N times in the store, which is what the TaskDrawer
+// surfaced as repeated output cards.
+let orchestraInitPromise: Promise<void> | null = null
+
 export const useOrchestra = create<OrchestraState>()(
   persist(
     (set, get) => ({
@@ -137,44 +145,51 @@ export const useOrchestra = create<OrchestraState>()(
 
       init: async () => {
         if (get().initialized) return
+        if (orchestraInitPromise) return orchestraInitPromise
         const o = api()
         if (!o) return
-        try {
-          const settings = await o.settings.get()
-          const teams = await o.team.list()
-          const perTeam = await Promise.all(
-            teams.map(async (t) => {
-              const [agents, edges] = await Promise.all([
-                o.agent.list(t.id),
-                o.edge.list(t.id)
-              ])
-              return { agents, edges }
+        orchestraInitPromise = (async () => {
+          try {
+            // Subscribe BEFORE we start awaiting IPC so events that fire
+            // during init (e.g. team creation) aren't dropped. The
+            // module-level guard above makes this a one-shot.
+            const dispose = o.onEvent((evt) => handleEvent(evt, set, get))
+
+            const settings = await o.settings.get()
+            const teams = await o.team.list()
+            const perTeam = await Promise.all(
+              teams.map(async (t) => {
+                const [agents, edges] = await Promise.all([
+                  o.agent.list(t.id),
+                  o.edge.list(t.id)
+                ])
+                return { agents, edges }
+              })
+            )
+            const agents = perTeam.flatMap((p) => p.agents)
+            const edges = perTeam.flatMap((p) => p.edges)
+
+            const prevActive = get().activeTeamId
+            const activeTeamId =
+              prevActive && teams.some((t) => t.id === prevActive)
+                ? prevActive
+                : (teams[0]?.id ?? null)
+
+            set({
+              settings,
+              teams,
+              agents,
+              edges,
+              activeTeamId,
+              initialized: true,
+              disposeSubscription: dispose
             })
-          )
-          const agents = perTeam.flatMap((p) => p.agents)
-          const edges = perTeam.flatMap((p) => p.edges)
-
-          // Keep a previously-persisted activeTeamId only if it still exists.
-          const prevActive = get().activeTeamId
-          const activeTeamId =
-            prevActive && teams.some((t) => t.id === prevActive)
-              ? prevActive
-              : (teams[0]?.id ?? null)
-
-          const dispose = o.onEvent((evt) => handleEvent(evt, set, get))
-
-          set({
-            settings,
-            teams,
-            agents,
-            edges,
-            activeTeamId,
-            initialized: true,
-            disposeSubscription: dispose
-          })
-        } catch (err) {
-          toastError('Orchestra init failed', (err as Error).message)
-        }
+          } catch (err) {
+            orchestraInitPromise = null
+            toastError('Orchestra init failed', (err as Error).message)
+          }
+        })()
+        return orchestraInitPromise
       },
 
       setActiveTeam: (id) => {
@@ -385,6 +400,13 @@ function handleEvent(evt: OrchestraEvent, set: SetFn, get: GetFn): void {
       return
     case 'messageLog.appended':
       set((s) => {
+        // Belt-and-suspenders dedupe on entry.id. The init-race fix
+        // should make this unreachable, but any future subscriber leak
+        // (hot reload, second store import…) would re-surface the
+        // duplicated-cards bug. Checking the tail covers the common
+        // case without an O(n) scan.
+        const tail = s.messageLog[s.messageLog.length - 1]
+        if (tail && tail.id === evt.entry.id) return s
         const next = [...s.messageLog, evt.entry]
         return {
           messageLog:

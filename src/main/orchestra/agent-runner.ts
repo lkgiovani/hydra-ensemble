@@ -550,14 +550,14 @@ async function runConversationCli(
     let stdoutBuf = ''
     let stderrBuf = ''
 
+    // Accumulate stdout silently. We used to emit each line as a
+    // separate 'output' MessageLog entry, which flooded the TaskDrawer
+    // with 40+ "caixinhas" per reply (every markdown bullet was its own
+    // card). Claude -p doesn't stream partial thought either — it
+    // prints the full response in one burst at the end — so there's
+    // nothing live to show. We emit a single final card in `close`.
     child.stdout.on('data', (chunk: Buffer) => {
-      const text = chunk.toString('utf8')
-      stdoutBuf += text
-      // Emit line-by-line for a live-ish feed; the renderer Console tab
-      // collapses empty lines visually anyway.
-      for (const line of text.split(/\r?\n/)) {
-        if (line.trim()) logMessage(ctx, task, 'output', line)
-      }
+      stdoutBuf += chunk.toString('utf8')
     })
 
     child.stderr.on('data', (chunk: Buffer) => {
@@ -576,6 +576,12 @@ async function runConversationCli(
 
     child.on('close', (code) => {
       if (code === 0) {
+        const reply = stdoutBuf.trim()
+        if (reply) logMessage(ctx, task, 'output', reply)
+        // Also surface a small status pill so the UI can render a
+        // clear "✓ done" marker at the end of the timeline, separate
+        // from the long reply card.
+        logMessage(ctx, task, 'status', '✓ task complete')
         emit({ kind: 'done' })
       } else {
         const tail = (stderrBuf || stdoutBuf).slice(-300).trim()
