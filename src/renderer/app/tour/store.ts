@@ -40,7 +40,20 @@ export const useTour = create<TourState>()(
       },
 
       start(id) {
-        if (!get().tours[id]) return
+        const tour = get().tours[id]
+        if (!tour) {
+          // Don't silently drop — surface it so a stale click is
+          // debuggable from the DevTools console instead of
+          // "button does nothing".
+          // eslint-disable-next-line no-console
+          console.warn(
+            `[tour] start('${id}') called but tour isn't registered. ` +
+              `Registered ids: ${Object.keys(get().tours).join(', ') || '(none)'}`
+          )
+          // Set activeId anyway — TourHost renders a friendly error
+          // card so the user understands something fired, rather
+          // than staring at an unchanged screen.
+        }
         set({ activeId: id, stepIndex: 0 })
       },
 

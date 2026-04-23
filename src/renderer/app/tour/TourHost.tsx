@@ -51,6 +51,20 @@ export default function TourHost() {
   const step: TourStep | null = tour?.steps[stepIndex] ?? null
   const isLast = tour ? stepIndex === tour.steps.length - 1 : false
 
+  // Diagnostic: fires only when the store transitions to a tour id that
+  // isn't registered. Happens in dev when a stale persisted activeId
+  // references a tour that no longer ships; landing on a recognisable
+  // console line makes the 'button did nothing' reports debuggable.
+  useEffect(() => {
+    if (activeId && !tour) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[TourHost] active tour id '${activeId}' is not in the registered ` +
+          `tours map. Registered: ${Object.keys(tours).join(', ') || '(none)'}`
+      )
+    }
+  }, [activeId, tour, tours])
+
   const [anchorRect, setAnchorRect] = useState<Rect | null>(null)
 
   // Measure the anchor every ~120ms while the step is active. Cheap
@@ -141,6 +155,40 @@ export default function TourHost() {
     if (!anchorRect) return centerCard()
     return positionCard(anchorRect, placement)
   }, [anchorRect, placement])
+
+  // When activeId is set but the tour isn't in the registry (stale
+  // persisted state, hot-reload tearing down the module), show a
+  // visible error card instead of silently rendering nothing — that
+  // silence was the whole reason users reported 'button does nothing'.
+  if (activeId && !tour) {
+    return createPortal(
+      <div className="fixed inset-0 z-[95] flex items-center justify-center bg-bg-0/80 backdrop-blur-sm">
+        <div
+          className="flex w-80 flex-col gap-3 border border-status-attention/50 bg-bg-2 px-4 py-4 shadow-pop df-fade-in"
+          style={{ borderRadius: 'var(--radius-lg)' }}
+        >
+          <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.2em] text-status-attention">
+            <X size={12} strokeWidth={2} />
+            tour not found
+          </div>
+          <p className="text-[12px] leading-relaxed text-text-2">
+            Tried to start <code className="rounded-sm bg-bg-3 px-1.5 py-0.5 font-mono text-[10px] text-text-1">{activeId}</code> but it's not in the
+            registered set. This usually means a release removed a tour
+            you had persisted in localStorage. Check DevTools console for
+            the registered ids.
+          </p>
+          <button
+            type="button"
+            onClick={() => stop(false)}
+            className="self-end rounded-sm border border-border-mid bg-bg-3 px-3 py-1 text-[11px] text-text-1 hover:bg-bg-4"
+          >
+            close
+          </button>
+        </div>
+      </div>,
+      document.body
+    )
+  }
 
   if (!tour || !step) return null
 

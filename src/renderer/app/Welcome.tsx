@@ -20,9 +20,20 @@ export default function Welcome({
   const projects = useProjects((s) => s.projects)
   const currentPath = useProjects((s) => s.currentPath)
   const addProject = useProjects((s) => s.addProject)
-  const startTour = useTour((s) => s.start)
   const completedTourIds = useTour((s) => s.completedIds)
   const welcomeTaken = !!completedTourIds['welcome']
+  // Dispatching through getState() so the click is fully decoupled
+  // from React state — bypasses any stale-closure suspicion while
+  // debugging the 'replay tutorial' no-op report.
+  const onStartTour = (): void => {
+    const store = useTour.getState()
+    // eslint-disable-next-line no-console
+    console.debug('[tour] welcome click', {
+      registered: Object.keys(store.tours),
+      haveWelcome: !!store.tours['welcome']
+    })
+    store.start('welcome')
+  }
 
   return (
     <div className="df-hero-bg df-scroll flex flex-1 items-center justify-center overflow-y-auto px-8 py-12">
@@ -36,8 +47,8 @@ export default function Welcome({
           <div className="mb-5 flex justify-center">
             <button
               type="button"
-              onClick={() => startTour('welcome')}
-              className="group relative inline-flex items-center gap-2 rounded-full border border-accent-500/50 bg-accent-500/10 px-4 py-1.5 font-mono text-[11px] uppercase tracking-[0.18em] text-accent-200 transition hover:bg-accent-500/20 hover:text-accent-100"
+              onClick={onStartTour}
+              className="group relative z-10 inline-flex cursor-pointer items-center gap-2 rounded-full border border-accent-500/50 bg-accent-500/10 px-4 py-1.5 font-mono text-[11px] uppercase tracking-[0.18em] text-accent-200 transition hover:bg-accent-500/20 hover:text-accent-100"
             >
               <span className="relative flex h-2 w-2">
                 {!welcomeTaken ? (
