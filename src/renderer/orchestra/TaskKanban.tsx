@@ -15,6 +15,7 @@ import type { KeyboardEvent } from 'react'
 import { CheckCircle2, Inbox, Loader2, XCircle } from 'lucide-react'
 import type { Agent, Priority, Task, TaskStatus, UUID } from '../../shared/orchestra'
 import { defaultAgentColor } from '../lib/agent'
+import { relativeTime } from '../lib/time'
 import { useOrchestra } from './state/orchestra'
 
 /** One column's definition — declarative so the render loop stays flat
@@ -74,23 +75,7 @@ const PRIORITY_PILL: Record<Priority, string> = {
   P3: 'border-border-mid bg-bg-3 text-text-3'
 }
 
-/** Relative time in compact units — identical output to TaskRow's helper
- *  so tooltips and meta rows read the same across views. */
-function relativeTime(iso: string): string {
-  const then = new Date(iso).getTime()
-  if (Number.isNaN(then)) return ''
-  const now = Date.now()
-  const diffSec = Math.max(0, Math.floor((now - then) / 1000))
-  if (diffSec < 60) return `${diffSec}s`
-  const diffMin = Math.floor(diffSec / 60)
-  if (diffMin < 60) return `${diffMin}m`
-  const diffHr = Math.floor(diffMin / 60)
-  if (diffHr < 24) return `${diffHr}h`
-  const diffDay = Math.floor(diffHr / 24)
-  if (diffDay === 1) return 'yesterday'
-  if (diffDay < 7) return `${diffDay}d`
-  return new Date(iso).toLocaleDateString()
-}
+// relativeTime moved to ../lib/time — shared across every orchestra surface.
 
 export default function TaskKanban() {
   const activeTeamId = useOrchestra((s) => s.activeTeamId)

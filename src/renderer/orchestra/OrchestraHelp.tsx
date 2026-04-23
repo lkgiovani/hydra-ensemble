@@ -7,8 +7,8 @@
  * invoke `onClose`. Content is a single scrollable card so the modal
  * works on laptop-height displays without breaking the layout.
  */
-import { useEffect } from 'react'
-import { HelpCircle, X } from 'lucide-react'
+import { HelpCircle } from 'lucide-react'
+import Modal from '../ui/Modal'
 import { fmtShortcut } from '../lib/platform'
 
 interface Props {
@@ -98,22 +98,6 @@ function KeyGroup({ keys }: { keys: string[] }) {
 }
 
 export default function OrchestraHelp({ open, onClose }: Props) {
-  // Esc closes — registered only while open so other listeners (global
-  // command palette, coach marks) keep ownership when the modal is hidden.
-  useEffect(() => {
-    if (!open) return
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        onClose()
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [open, onClose])
-
-  if (!open) return null
-
   const canvasShortcuts: ReadonlyArray<ShortcutRow> = [
     { keys: ['A'], description: 'New agent at canvas center.' },
     { keys: ['Double-click'], description: 'New agent where you clicked.' },
@@ -133,124 +117,101 @@ export default function OrchestraHelp({ open, onClose }: Props) {
   ]
 
   return (
-    <div
-      className="df-fade-in fixed inset-0 z-[70] flex items-center justify-center bg-bg-0/85 backdrop-blur-md"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose()
-      }}
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="orchestra help"
+      titleIcon={<HelpCircle size={14} strokeWidth={1.75} />}
+      maxWidth="max-w-2xl"
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="orchestra-help-title"
-        className="df-scroll bg-bg-2 shadow-pop rounded-[var(--radius-lg)] border border-border-soft max-w-2xl w-full max-h-[80vh] overflow-y-auto"
-      >
-        <header className="sticky top-0 z-10 flex items-center justify-between border-b border-border-soft bg-bg-2/95 px-4 py-3 backdrop-blur-sm">
-          <div className="flex items-center gap-2">
-            <HelpCircle size={14} strokeWidth={1.75} className="text-text-2" />
-            <span id="orchestra-help-title" className="df-label text-text-1">
-              orchestra help
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-sm p-1 text-text-3 hover:bg-bg-3 hover:text-text-1"
-            aria-label="close help"
+      <div className="df-scroll flex max-h-[70vh] flex-col gap-6 overflow-y-auto">
+        <section aria-labelledby="help-canvas">
+          <h3
+            id="help-canvas"
+            className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-2"
           >
-            <X size={14} strokeWidth={1.75} />
-          </button>
-        </header>
+            Canvas shortcuts
+          </h3>
+          <dl className="flex flex-col gap-1.5">
+            {canvasShortcuts.map((row, i) => (
+              <div
+                key={`canvas-${i}`}
+                className="flex items-start justify-between gap-4"
+              >
+                <dt className="shrink-0">
+                  <KeyGroup keys={row.keys} />
+                </dt>
+                <dd className="text-right text-[12px] leading-snug text-text-2">
+                  {row.description}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </section>
 
-        <div className="flex flex-col gap-6 px-5 py-5">
-          <section aria-labelledby="help-canvas">
-            <h3
-              id="help-canvas"
-              className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-2"
-            >
-              Canvas shortcuts
-            </h3>
-            <dl className="flex flex-col gap-1.5">
-              {canvasShortcuts.map((row, i) => (
-                <div
-                  key={`canvas-${i}`}
-                  className="flex items-start justify-between gap-4"
-                >
-                  <dt className="shrink-0">
-                    <KeyGroup keys={row.keys} />
-                  </dt>
-                  <dd className="text-right text-[12px] leading-snug text-text-2">
-                    {row.description}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          </section>
+        <section aria-labelledby="help-keyboard">
+          <h3
+            id="help-keyboard"
+            className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-2"
+          >
+            Keyboard
+          </h3>
+          <dl className="flex flex-col gap-1.5">
+            {keyboardShortcuts.map((row, i) => (
+              <div
+                key={`kbd-${i}`}
+                className="flex items-start justify-between gap-4"
+              >
+                <dt className="shrink-0">
+                  <KeyGroup keys={row.keys} />
+                </dt>
+                <dd className="text-right text-[12px] leading-snug text-text-2">
+                  {row.description}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </section>
 
-          <section aria-labelledby="help-keyboard">
-            <h3
-              id="help-keyboard"
-              className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-2"
-            >
-              Keyboard
-            </h3>
-            <dl className="flex flex-col gap-1.5">
-              {keyboardShortcuts.map((row, i) => (
-                <div
-                  key={`kbd-${i}`}
-                  className="flex items-start justify-between gap-4"
-                >
-                  <dt className="shrink-0">
-                    <KeyGroup keys={row.keys} />
-                  </dt>
-                  <dd className="text-right text-[12px] leading-snug text-text-2">
-                    {row.description}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          </section>
+        <section aria-labelledby="help-concepts">
+          <h3
+            id="help-concepts"
+            className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-2"
+          >
+            Concepts
+          </h3>
+          <div className="flex flex-col gap-2">
+            {CONCEPTS.map((c) => (
+              <p key={c.term} className="text-[12px] leading-snug text-text-2">
+                <span className="font-semibold text-text-1">{c.term}</span>
+                <span className="text-text-4"> — </span>
+                {c.body}
+              </p>
+            ))}
+          </div>
+        </section>
 
-          <section aria-labelledby="help-concepts">
-            <h3
-              id="help-concepts"
-              className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-2"
-            >
-              Concepts
-            </h3>
-            <div className="flex flex-col gap-2">
-              {CONCEPTS.map((c) => (
-                <p key={c.term} className="text-[12px] leading-snug text-text-2">
-                  <span className="font-semibold text-text-1">{c.term}</span>
-                  <span className="text-text-4"> — </span>
-                  {c.body}
-                </p>
-              ))}
-            </div>
-          </section>
-
-          <section aria-labelledby="help-where">
-            <h3
-              id="help-where"
-              className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-2"
-            >
-              Where things live
-            </h3>
-            <ul className="flex flex-col gap-1.5">
-              {WHERE.map((w, i) => (
-                <li
-                  key={`where-${i}`}
-                  className="flex items-baseline gap-2 text-[12px] leading-snug text-text-2"
-                >
-                  <span className="font-semibold text-text-1">{w.label}</span>
-                  <span className="text-text-4">→</span>
-                  <span>{w.body}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        </div>
+        <section aria-labelledby="help-where">
+          <h3
+            id="help-where"
+            className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-2"
+          >
+            Where things live
+          </h3>
+          <ul className="flex flex-col gap-1.5">
+            {WHERE.map((w, i) => (
+              <li
+                key={`where-${i}`}
+                className="flex items-baseline gap-2 text-[12px] leading-snug text-text-2"
+              >
+                <span className="font-semibold text-text-1">{w.label}</span>
+                <span className="text-text-4">→</span>
+                <span>{w.body}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
       </div>
-    </div>
+    </Modal>
   )
 }

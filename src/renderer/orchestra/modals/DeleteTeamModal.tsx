@@ -7,9 +7,10 @@
  * repo/project deletion — slow enough to prevent muscle-memory mistakes,
  * fast enough that it's not an obstacle for users who really mean it.
  */
-import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, X } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { AlertTriangle } from 'lucide-react'
 import type { Team } from '../../../shared/orchestra'
+import Modal from '../../ui/Modal'
 import { useOrchestra } from '../state/orchestra'
 
 /** Primary shape documented in the PRD: caller owns the open flag and
@@ -80,23 +81,19 @@ export default function DeleteTeamModal(props: Props) {
     if (open) inputRef.current?.focus()
   }, [open])
 
-  // Esc closes — but only when we're not mid-submit. Closing while the
-  // delete IPC is in flight would orphan the pending promise and hide any
-  // error toast behind a disappearing modal.
-  useEffect(() => {
-    if (!open) return
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape' && !submitting) onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [open, onClose, submitting])
-
   if (!open) return null
 
   const matches = confirm === teamName
   const canDelete = matches && !submitting
   const slug = slugify(teamName)
+
+  // Guarded close so Esc / backdrop / X all respect the submitting gate:
+  // closing while the delete IPC is in flight would orphan the pending
+  // promise and hide any error toast behind a disappearing modal.
+  const guardedClose = useCallback((): void => {
+    if (submitting) return
+    onClose()
+  }, [onClose, submitting])
 
   const submit = async (): Promise<void> => {
     if (!canDelete) return
@@ -113,71 +110,15 @@ export default function DeleteTeamModal(props: Props) {
   }
 
   return (
-    <div
-      className="df-fade-in fixed inset-0 z-[70] flex items-center justify-center bg-bg-0/85 px-4 backdrop-blur-md"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget && !submitting) onClose()
-      }}
-    >
-      <div
-        role="dialog"
-        aria-label="delete team"
-        className="flex w-full max-w-md flex-col overflow-hidden border border-border-mid bg-bg-2 shadow-pop"
-        style={{ borderRadius: 'var(--radius-lg)' }}
-      >
-        <header className="flex items-center justify-between border-b border-border-soft bg-bg-1 px-4 py-2.5">
-          <div className="flex items-center gap-2">
-            <AlertTriangle size={14} strokeWidth={1.75} className="text-red-400" />
-            <span className="df-label text-red-400">delete team</span>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={submitting}
-            className="rounded-sm p-1 text-text-3 hover:bg-bg-3 hover:text-text-1 disabled:opacity-40"
-            aria-label="close"
-          >
-            <X size={14} strokeWidth={1.75} />
-          </button>
-        </header>
-
-        <div className="flex flex-col gap-3 p-4">
-          <p className="text-xs leading-relaxed text-text-2">
-            This will delete the team{' '}
-            <span className="font-mono text-text-1">{teamName}</span>, all its agents, all
-            cached message logs, and the folder at{' '}
-            <code className="rounded-sm bg-bg-3 px-1 font-mono text-[10px] text-text-1">
-              ~/.hydra-ensemble/orchestra/teams/{slug}
-            </code>
-            . This cannot be undone.
-          </p>
-
-          <div>
-            <label className="df-label mb-1.5 block">
-              type the team name to confirm
-            </label>
-            <input
-              ref={inputRef}
-              type="text"
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && canDelete) void submit()
-              }}
-              placeholder={teamName}
-              disabled={submitting}
-              autoComplete="off"
-              spellCheck={false}
-              className={`w-full rounded-sm border bg-bg-1 px-2.5 py-1.5 font-mono text-sm text-text-1 placeholder:text-text-4 focus:outline-none disabled:opacity-50 ${
-                matches
-                  ? 'border-red-500/70 focus:border-red-500'
-                  : 'border-border-mid focus:border-accent-500'
-              }`}
-            />
-          </div>
-        </div>
-
-        <footer className="flex items-center justify-end gap-1.5 border-t border-border-soft bg-bg-1 px-4 py-2.5">
+    <Modal
+      open={open}
+      onClose={guardedClose}
+      title="delete team"
+      titleIcon={<AlertTriangle size={14} strokeWidth={1.75} className="text-red-400" />}
+      maxWidth="max-w-md"
+      closeOnBackdrop={!submitting}
+      footer={
+        <>
           <button
             type="button"
             onClick={onClose}
@@ -194,8 +135,44 @@ export default function DeleteTeamModal(props: Props) {
           >
             {submitting ? 'deleting…' : 'Delete team'}
           </button>
-        </footer>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <p className="text-xs leading-relaxed text-text-2">
+          This will delete the team{' '}
+          <span className="font-mono text-text-1">{teamName}</span>, all its agents, all
+          cached message logs, and the folder at{' '}
+          <code className="rounded-sm bg-bg-3 px-1 font-mono text-[10px] text-text-1">
+            ~/.hydra-ensemble/orchestra/teams/{slug}
+          </code>
+          . This cannot be undone.
+        </p>
+
+        <div>
+          <label className="df-label mb-1.5 block">
+            type the team name to confirm
+          </label>
+          <input
+            ref={inputRef}
+            type="text"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && canDelete) void submit()
+            }}
+            placeholder={teamName}
+            disabled={submitting}
+            autoComplete="off"
+            spellCheck={false}
+            className={`w-full rounded-sm border bg-bg-1 px-2.5 py-1.5 font-mono text-sm text-text-1 placeholder:text-text-4 focus:outline-none disabled:opacity-50 ${
+              matches
+                ? 'border-red-500/70 focus:border-red-500'
+                : 'border-border-mid focus:border-accent-500'
+            }`}
+          />
+        </div>
       </div>
-    </div>
+    </Modal>
   )
 }

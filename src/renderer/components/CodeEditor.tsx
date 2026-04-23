@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   Clipboard,
@@ -16,6 +16,7 @@ import {
   X,
 } from 'lucide-react'
 import { useEditor } from '../state/editor'
+import { useEditorTabs } from '../state/editorTabs'
 import { useSessions } from '../state/sessions'
 import {
   useEditorSidebarSize,
@@ -24,6 +25,8 @@ import {
 } from '../state/panels'
 import FileTree from './editor/FileTree'
 import CodeMirrorView, { getActiveView } from './editor/CodeMirrorView'
+import EditorTabs from './editor/EditorTabs'
+import JumpToSymbol from './editor/JumpToSymbol'
 import MarkdownPreview from './editor/MarkdownPreview'
 import GitChangesPanel from './editor/GitChangesPanel'
 import InlineSearch from './editor/InlineSearch'
@@ -108,6 +111,36 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
   useEffect(() => {
     if (sideTab === 'search') setSearchEverOpened(true)
   }, [sideTab])
+
+  // Jump-to-symbol palette (mod+P inside the editor). Controlled from
+  // here so Escape inside the palette lands back in the editor without
+  // tearing down state.
+  const [jumpOpen, setJumpOpen] = useState(false)
+
+  // Tabs store (persisted across reloads). The CodeEditor explicitly
+  // mirrors into `useEditorTabs` only when the user OPENS a file — never
+  // when we happen to render one (e.g. overrideRoot cleanup, diff
+  // close-to-file fallback). This keeps the tab strip honest: it only
+  // shows paths the user actually asked to surface.
+  const tabsActivePath = useEditorTabs((s) => s.activePath)
+  const openInTabs = useEditorTabs.getState().open
+
+  // Guard against out-of-order `readFile` responses when the user flips
+  // tabs while an earlier read is still in flight. Every tab-switch or
+  // explicit open bumps this id; the async consumer drops stale replies.
+  const tabLoadRunId = useRef(0)
+
+  // Single entrypoint for "user asked to open this file". Bumps the run
+  // id, calls the editor store's openFile (which does the IPC read), and
+  // — only on success — surfaces the resolved path in the tabs store.
+  // Callers MUST use this instead of openFile directly so tabs stay in
+  // sync; forgetting to mirror into tabs is the whole reason this exists.
+  const openAndTrack = async (path: string): Promise<void> => {
+    const id = ++tabLoadRunId.current
+    const resolved = await openFile(path)
+    if (id !== tabLoadRunId.current) return
+    if (resolved) openInTabs(resolved)
+  }
 
   const activeSession = useMemo(
     () => sessions.find((s) => s.id === activeSessionId) ?? null,
@@ -459,7 +492,7 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
             >
               <div className="h-full">
                 {root ? (
-                  <FileTree root={root} onOpenFile={(p) => void openFile(p)} />
+                  <FileTree root={root} onOpenFile={(p) => void openAndTrack(p)} />
                 ) : (
                   <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center">
                     <FileIcon size={28} strokeWidth={1.25} className="text-text-4" />
@@ -484,7 +517,7 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
               {searchEverOpened ? (
                 <SearchPanel
                   cwd={root}
-                  onOpenMatch={(p) => void openFile(p)}
+                  onOpenMatch={(p) => void openAndTrack(p)}
                   initialQuery={globalSearchSeed}
                   focusNonce={globalSearchFocusNonce}
                 />

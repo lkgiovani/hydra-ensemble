@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import type { Agent, Priority, Task, TaskStatus } from '../../../shared/orchestra'
 import { useOrchestra } from '../state/orchestra'
+import { relativeTime } from '../../lib/time'
 
 interface Props {
   agent: Agent
@@ -38,22 +39,8 @@ function priorityPillStyles(p: Priority): string {
   }
 }
 
-/** Small inline "time ago" helper. The orchestra store streams updates so
- *  timestamps drift — we trade exactness for zero-dependency brevity. */
-function relativeTime(iso: string): string {
-  const then = new Date(iso).getTime()
-  if (Number.isNaN(then)) return '—'
-  const diff = Date.now() - then
-  if (diff < 0) return 'now'
-  const s = Math.floor(diff / 1000)
-  if (s < 60) return `${s}s`
-  const m = Math.floor(s / 60)
-  if (m < 60) return `${m}m`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h}h`
-  const d = Math.floor(h / 24)
-  return `${d}d`
-}
+// Time formatting moved to the shared `lib/time` helper — every surface
+// now renders the same "Ns / Nm / Nh / Nd / date" ladder.
 
 function StatusIcon({ status }: { status: TaskStatus }) {
   switch (status) {

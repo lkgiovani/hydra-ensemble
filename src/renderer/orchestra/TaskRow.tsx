@@ -4,10 +4,24 @@
  * Keyboard-accessible button-row that opens the TaskDrawer on click. All
  * colour/label derivation happens in the parent (TasksPanel) so the row
  * stays presentational and cheap to re-render in large lists.
+ *
+ * UX affordances rendered inline on the row:
+ *   · "auto" pill when the task was fallback-routed (no trigger matched)
+ *   · "fix" chip when a failed task is waiting on provider config
+ *     (no_api_key / missing claude CLI) — clicking opens ProvidersDialog
+ *     via a window event so the store stays lean.
  */
-import type { KeyboardEvent } from 'react'
-import { CircleCheck, CircleDashed, CircleX, Loader2 } from 'lucide-react'
+import type { KeyboardEvent, MouseEvent } from 'react'
+import {
+  CircleCheck,
+  CircleDashed,
+  CircleX,
+  Loader2,
+  Route as RouteIcon,
+  Settings
+} from 'lucide-react'
 import type { Priority, Task, TaskStatus } from '../../shared/orchestra'
+import { relativeTime } from '../lib/time'
 
 interface Props {
   task: Task
@@ -15,6 +29,14 @@ interface Props {
    *  parent resolves this from the agents slice so TaskRow doesn't need
    *  to touch the store. */
   assigneeName: string | null
+  /** True when the latest Route for this task used a `fallback:*` reason.
+   *  Resolved by the parent from the routes slice. When true we show a tiny
+   *  neutral "auto" pill so the user can tell at a glance the router
+   *  defaulted vs. matched a trigger. */
+  autoRouted?: boolean
+  /** Short failure reason (e.g. Task.blockedReason) — used to decide
+   *  whether to surface the "fix" provider chip. */
+  failureReason?: string
   onClick: () => void
 }
 
@@ -75,25 +97,26 @@ function StatusIcon({ status }: { status: TaskStatus }) {
   }
 }
 
-/** Relative time in tiny units. "3s", "2m", "1h", "yesterday", else a
- *  short locale date. Inline, zero-dep. */
-function relativeTime(iso: string): string {
-  const then = new Date(iso).getTime()
-  if (Number.isNaN(then)) return ''
-  const now = Date.now()
-  const diffSec = Math.max(0, Math.floor((now - then) / 1000))
-  if (diffSec < 60) return `${diffSec}s`
-  const diffMin = Math.floor(diffSec / 60)
-  if (diffMin < 60) return `${diffMin}m`
-  const diffHr = Math.floor(diffMin / 60)
-  if (diffHr < 24) return `${diffHr}h`
-  const diffDay = Math.floor(diffHr / 24)
-  if (diffDay === 1) return 'yesterday'
-  if (diffDay < 7) return `${diffDay}d`
-  return new Date(iso).toLocaleDateString()
+// relativeTime moved to ../lib/time — every surface renders the same
+// "Ns / Nm / Nh / Nd / date" ladder now.
+
+/** True when a failed task's reason points at missing provider configuration.
+ *  Matches the two shapes we emit from main: the canonical `no_api_key`
+ *  short-code and the human CLI-not-found message. Case-insensitive so
+ *  minor wording drift doesn't break the affordance. */
+function isProviderFailure(reason: string | undefined): boolean {
+  if (!reason) return false
+  const r = reason.toLowerCase()
+  return r === 'no_api_key' || r.includes('claude cli not found')
 }
 
-export default function TaskRow({ task, assigneeName, onClick }: Props) {
+export default function TaskRow({
+  task,
+  assigneeName,
+  autoRouted = false,
+  failureReason,
+  onClick
+}: Props) {
   const onKey = (e: KeyboardEvent<HTMLDivElement>): void => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
@@ -106,6 +129,22 @@ export default function TaskRow({ task, assigneeName, onClick }: Props) {
   const visibleTags = task.tags.slice(0, 2)
   const hiddenTagCount = task.tags.length - visibleTags.length
 
+  const showFixChip =
+    task.status === 'failed' && isProviderFailure(failureReason)
+
+  const onFixProvider = (e: MouseEvent<HTMLButtonElement>): void => {
+    // Don't propagate to the row — the chip has its own destination.
+    e.stopPropagation()
+    window.dispatchEvent(new CustomEvent('orchestra:open-providers'))
+  }
+
+  const onFixKey = (e: KeyboardEvent<HTMLButtonElement>): void => {
+    // Swallow Enter/Space so the row's handler doesn't also fire.
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.stopPropagation()
+    }
+  }
+
   return (
     <div
       role="button"
@@ -116,7 +155,7 @@ export default function TaskRow({ task, assigneeName, onClick }: Props) {
       className="flex min-h-16 cursor-pointer flex-col gap-1 border-b border-border-soft px-3 py-2 transition-colors hover:bg-bg-3 focus:bg-bg-3 focus:outline-none"
       aria-label={`Open task ${task.title}`}
     >
-      {/* Top row — priority pill + title */}
+      {/* Top row — priority pill + title + optional affordances */}
       <div className="flex items-center gap-2">
         <span
           className={`shrink-0 rounded-sm border px-1 py-[1px] font-mono text-[9px] font-semibold tracking-wider ${PRIORITY_PILL[task.priority]}`}
@@ -124,12 +163,35 @@ export default function TaskRow({ task, assigneeName, onClick }: Props) {
         >
           {task.priority}
         </span>
+        {autoRouted ? (
+          <span
+            className="flex shrink-0 items-center gap-0.5 rounded-sm border border-border-soft bg-bg-3 px-1 py-[1px] font-mono text-[9px] text-text-3"
+            title="Auto-routed to main agent — no trigger matched"
+            aria-label="Auto-routed"
+          >
+            <RouteIcon size={9} strokeWidth={1.75} />
+            auto
+          </span>
+        ) : null}
         <span
           className="truncate text-[12px] text-text-1"
           title={task.title}
         >
           {task.title}
         </span>
+        {showFixChip ? (
+          <button
+            type="button"
+            onClick={onFixProvider}
+            onKeyDown={onFixKey}
+            className="ml-auto flex shrink-0 items-center gap-0.5 rounded-sm border border-red-500/60 bg-red-500/15 px-1 py-[1px] font-mono text-[9px] font-semibold text-red-300 hover:bg-red-500/25 hover:text-red-200"
+            title={failureReason ?? 'Fix provider configuration'}
+            aria-label="Fix provider configuration"
+          >
+            <Settings size={9} strokeWidth={2} />
+            fix
+          </button>
+        ) : null}
       </div>
 
       {/* Meta row — tags, status, assignee, time */}

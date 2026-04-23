@@ -29,6 +29,7 @@ import {
 } from 'lucide-react'
 import type { MessageLog } from '../../shared/orchestra'
 import { useOrchestra } from './state/orchestra'
+import { relativeTime } from '../lib/time'
 
 interface Props {
   agentId: string
@@ -54,20 +55,7 @@ function iconFor(tool: string): LucideIcon {
   return TOOL_ICONS[tool] ?? Dot
 }
 
-/** Relative timestamp in the short style used elsewhere in the renderer. */
-function relativeTime(iso: string): string {
-  const now = Date.now()
-  const then = new Date(iso).getTime()
-  const sec = Math.max(0, Math.floor((now - then) / 1000))
-  if (sec < 5) return 'now'
-  if (sec < 60) return `${sec}s`
-  const min = Math.floor(sec / 60)
-  if (min < 60) return `${min}m`
-  const hr = Math.floor(min / 60)
-  if (hr < 24) return `${hr}h`
-  const day = Math.floor(hr / 24)
-  return `${day}d`
-}
+// relativeTime moved to ../lib/time — single source of truth.
 
 /** Best-effort parse. Returns `null` when the string is not JSON. */
 function safeParse(raw: string): unknown {
