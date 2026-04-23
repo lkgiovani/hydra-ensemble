@@ -2,6 +2,7 @@ import { useEffect, useMemo } from 'react'
 import { Keyboard, RotateCcw, X, Pencil, Trash2, Check } from 'lucide-react'
 import { ACTIONS, allBindings, useKeybinds } from '../state/keybinds'
 import { formatCombo } from '../lib/keybind'
+import { Kbd } from '../ui'
 
 interface Props {
   open: boolean
@@ -150,12 +151,11 @@ export default function HelpOverlay({ open, onClose }: Props) {
             <ul className="ml-3 list-disc space-y-0.5">
               <li>
                 Click a binding chip to record a new combo. Press the new combo, or{' '}
-                <kbd className="rounded-sm bg-bg-3 px-1 font-mono text-text-3">Esc</kbd> to cancel.
+                <Kbd>Esc</Kbd> to cancel.
               </li>
               <li>
-                <kbd className="rounded-sm bg-bg-3 px-1 font-mono text-text-3">↻</kbd> reverts to
-                the shipped default; <kbd className="rounded-sm bg-bg-3 px-1 font-mono text-text-3">🗑</kbd>{' '}
-                removes the bind so the action is unavailable.
+                <Kbd>↻</Kbd> reverts to the shipped default; <Kbd>🗑</Kbd> removes the
+                bind so the action is unavailable.
               </li>
               <li>
                 <strong>mod</strong> = ⌘ on macOS, Ctrl on Linux/Windows. Bindings persist in
@@ -171,10 +171,7 @@ export default function HelpOverlay({ open, onClose }: Props) {
 
         <footer className="flex items-center justify-between border-t border-border-soft bg-bg-1 px-4 py-2 font-mono text-[10px] text-text-4">
           <span>{ACTIONS.length} actions</span>
-          <span>
-            press <kbd className="mx-1 rounded-sm bg-bg-3 px-1 text-text-3">?</kbd> any time ·{' '}
-            <kbd className="mx-1 rounded-sm bg-bg-3 px-1 text-text-3">Esc</kbd> to close
-          </span>
+          <span>press <Kbd>?</Kbd> any time · <Kbd>Esc</Kbd> to close</span>
         </footer>
       </div>
     </div>

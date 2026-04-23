@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Key, Info, ExternalLink, Loader2, Check, AlertCircle } from 'lucide-react'
 import type { SecretStorage } from '../../../shared/orchestra'
+import Modal from '../../ui/Modal'
 
 interface Props {
   open: boolean
@@ -43,14 +44,8 @@ export default function ApiKeyModal({ open, onClose, blocking = false }: Props) 
     }
   }, [open])
 
-  useEffect(() => {
-    if (!open) return
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape' && !blocking) onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [open, blocking, onClose])
+  // Esc handling is owned by the Modal primitive now; when `blocking` is
+  // true we pass `closeOnBackdrop={false}` and intercept onClose to no-op.
 
   if (!open) return null
 
@@ -98,31 +93,42 @@ export default function ApiKeyModal({ open, onClose, blocking = false }: Props) 
     }
   }
 
-  return (
-    <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-bg-0/85 px-4 backdrop-blur-md df-fade-in"
-      onMouseDown={(e) => { if (e.target === e.currentTarget && !blocking) onClose() }}
-    >
-      <div
-        className="flex w-full max-w-md flex-col overflow-hidden border border-border-mid bg-bg-2 shadow-pop"
-        style={{ borderRadius: 'var(--radius-lg)' }}
-      >
-        <header className="flex items-center justify-between border-b border-border-soft bg-bg-1 px-4 py-2.5">
-          <div className="flex items-center gap-2">
-            <Key size={14} strokeWidth={1.75} className="text-accent-400" />
-            <span className="df-label">anthropic api key</span>
-          </div>
-          {/* Hidden entirely (rather than disabled) when blocking — a disabled
-              close affordance reads as "broken". */}
-          {!blocking ? (
-            <button
-              type="button" onClick={onClose} aria-label="close"
-              className="rounded-sm px-1.5 py-0.5 text-[10px] text-text-3 hover:bg-bg-3 hover:text-text-1"
-            >esc</button>
-          ) : null}
-        </header>
+  // When the modal is blocking, Esc + backdrop-click are suppressed by
+  // wrapping onClose in a guard. That plus closeOnBackdrop={false} gives
+  // us the same "no exit until a valid key" behavior the old custom
+  // overlay had.
+  const handleClose = (): void => {
+    if (blocking) return
+    onClose()
+  }
 
-        <div className="space-y-4 p-4">
+  return (
+    <Modal
+      open={open}
+      onClose={handleClose}
+      title="Anthropic API key for Orchestra"
+      titleIcon={<Key size={14} strokeWidth={1.75} className="text-accent-400" />}
+      maxWidth="max-w-md"
+      closeOnBackdrop={!blocking}
+      footer={
+        <>
+          <button
+            type="button" onClick={onClose}
+            disabled={blocking || status === 'validating'}
+            className="rounded-sm border border-border-soft px-3 py-1.5 text-xs text-text-2 hover:border-border-mid hover:bg-bg-3 disabled:cursor-not-allowed disabled:opacity-40"
+          >Cancel</button>
+          <button
+            type="button" onClick={() => void validate()} disabled={!canSubmit}
+            className="flex items-center gap-1.5 rounded-sm bg-accent-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-600 disabled:opacity-40"
+          >
+            {status === 'validating' ? (
+              <><Loader2 size={12} strokeWidth={2} className="animate-spin" />Validating…</>
+            ) : 'Validate & Save'}
+          </button>
+        </>
+      }
+    >
+        <div className="space-y-4">
           <div>
             <h2 className="text-sm font-semibold text-text-1">Anthropic API key for Orchestra</h2>
             <p className="mt-1 text-[11px] leading-relaxed text-text-3">
@@ -182,24 +188,7 @@ export default function ApiKeyModal({ open, onClose, blocking = false }: Props) 
             <span className="font-mono text-text-4"> console.anthropic.com/settings/keys</span>
           </a>
         </div>
-
-        <footer className="flex items-center justify-end gap-1.5 border-t border-border-soft bg-bg-1 px-4 py-2.5">
-          <button
-            type="button" onClick={onClose}
-            disabled={blocking || status === 'validating'}
-            className="rounded-sm border border-border-soft px-3 py-1.5 text-xs text-text-2 hover:border-border-mid hover:bg-bg-3 disabled:cursor-not-allowed disabled:opacity-40"
-          >Cancel</button>
-          <button
-            type="button" onClick={() => void validate()} disabled={!canSubmit}
-            className="flex items-center gap-1.5 rounded-sm bg-accent-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-600 disabled:opacity-40"
-          >
-            {status === 'validating' ? (
-              <><Loader2 size={12} strokeWidth={2} className="animate-spin" />Validating…</>
-            ) : 'Validate & Save'}
-          </button>
-        </footer>
-      </div>
-    </div>
+    </Modal>
   )
 }
 

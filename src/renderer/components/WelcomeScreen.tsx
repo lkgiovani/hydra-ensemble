@@ -12,6 +12,7 @@ import {
 import { useProjects } from '../state/projects'
 import { useSpawnDialog } from '../state/spawn'
 import { useOrchestra } from '../orchestra/state/orchestra'
+import { Kbd } from '../ui'
 import type { ProjectMeta } from '../../shared/types'
 
 interface Props {
@@ -204,10 +205,7 @@ export default function WelcomeScreen({ open, onClose }: Props) {
           </button>
 
           <span className="font-mono text-[10px] text-text-4">
-            <kbd className="mx-1 rounded-sm bg-bg-3 px-1 text-text-3">Enter</kbd>
-            continue ·
-            <kbd className="mx-1 rounded-sm bg-bg-3 px-1 text-text-3">Esc</kbd>
-            skip
+            <Kbd>Enter</Kbd> continue · <Kbd>Esc</Kbd> skip
           </span>
 
           {step < TOTAL_STEPS - 1 ? (

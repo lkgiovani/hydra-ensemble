@@ -33,6 +33,7 @@ import OrchestraView from './orchestra/OrchestraView'
 import TourPlayer from './tour/TourPlayer'
 import TourLauncher from './tour/TourLauncher'
 import WelcomeScreen from './components/WelcomeScreen'
+import { Kbd } from './ui'
 
 /** Shows the welcome screen once per install by checking a localStorage
  *  flag. Kept out of <App> so App's state stays tidy; re-opening the
@@ -873,16 +874,9 @@ function EmptyMain({ claudePath }: { claudePath: string | null | undefined }) {
             </p>
           ) : (
             <p className="text-[11px] text-text-4">
-              Tip:{' '}
-              <kbd className="rounded bg-bg-3 px-1 py-0.5 font-mono">
-                {fmtShortcut('T')}
-              </kbd>{' '}
-              toggles the projects drawer ·{' '}
-              <kbd className="rounded bg-bg-3 px-1 py-0.5 font-mono">
-                {fmtShortcut('`')}
-              </kbd>{' '}
-              opens the terminals panel ·{' '}
-              <kbd className="rounded bg-bg-3 px-1 py-0.5 font-mono">?</kbd> shows all shortcuts
+              Tip: <Kbd>{fmtShortcut('T')}</Kbd> toggles the projects drawer ·{' '}
+              <Kbd>{fmtShortcut('`')}</Kbd> opens the terminals panel ·{' '}
+              <Kbd>?</Kbd> shows all shortcuts
             </p>
           )}
         </div>

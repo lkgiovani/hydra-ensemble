@@ -20,6 +20,7 @@ import { useOrchestra } from '../orchestra/state/orchestra'
 import type { ChangedFile, SessionMeta, Worktree } from '../../shared/types'
 import { fmtShortcut } from '../lib/platform'
 import SessionCard from './SessionCard'
+import { Kbd } from '../ui'
 
 interface Props {
   open: boolean
@@ -511,20 +512,10 @@ export default function Dashboard({ open, onClose, mode = 'inline' }: Props) {
     <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-border-soft bg-bg-2 px-6 py-3 text-[11px] text-text-4">
       <div className="flex items-center gap-2">
         <Clock size={11} strokeWidth={1.75} />
-        <span>
-          press{' '}
-          <kbd className="rounded-sm bg-bg-3 px-1.5 py-0.5 font-mono text-[10px] text-text-2">
-            {fmtShortcut('K')}
-          </kbd>{' '}
-          for the command palette
-        </span>
+        <span>press <Kbd>{fmtShortcut('K')}</Kbd> for the command palette</span>
       </div>
       <div>
-        new here? try the{' '}
-        <kbd className="rounded-sm bg-bg-3 px-1.5 py-0.5 font-mono text-[10px] text-text-2">
-          tour
-        </kbd>{' '}
-        button in the top-right.
+        new here? try the <Kbd>tour</Kbd> button in the top-right.
       </div>
     </footer>
   )
