@@ -7,7 +7,6 @@ import {
 } from 'react'
 import type {
   CSSProperties,
-  KeyboardEvent,
   MouseEvent as ReactMouseEvent
 } from 'react'
 import {
@@ -352,20 +351,21 @@ function CanvasInner() {
   // Keyboard shortcuts
   // ------------------------------------------------------------------------
 
-  const onKeyDownCanvas = useCallback(
-    (e: KeyboardEvent<HTMLDivElement>): void => {
-      // Skip when the user is typing in an input/textarea inside the canvas
-      // (e.g. the AgentCard inline rename). `nodrag` inputs still bubble
-      // keydown up to us; filter here to keep rename ergonomics sane.
+  // Bind at window level so the shortcuts work even when the canvas
+  // wrapper hasn't been clicked/focused yet. The target-tagname guard
+  // below keeps typing inside inputs / textareas / contenteditables
+  // (Inspector tabs, AgentCard rename, TaskBar) free of hijacks.
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent): void => {
       const target = e.target as HTMLElement | null
       const inInput =
         target instanceof HTMLElement &&
         (target.tagName === 'INPUT' ||
           target.tagName === 'TEXTAREA' ||
           target.isContentEditable)
-      if (inInput) return
 
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedAgentIds.length > 0) {
+        if (inInput) return
         e.preventDefault()
         if (selectedAgentIds.length > 1) {
           const ok = window.confirm(
@@ -379,27 +379,30 @@ function CanvasInner() {
       }
 
       if (e.key === 'a' || e.key === 'A') {
-        // No modifier — bare A opens the popover at canvas centre.
-        if (e.metaKey || e.ctrlKey || e.altKey) return
+        if (inInput) return
+        if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return
         e.preventDefault()
         openPopoverCenter()
         return
       }
 
       if (e.key === '0' && (e.metaKey || e.ctrlKey)) {
+        if (inInput) return
         e.preventDefault()
         fitView({ duration: 200 })
         return
       }
 
       if (e.key === '/') {
+        if (inInput) return
         e.preventDefault()
         window.dispatchEvent(new CustomEvent('orchestra:focus-task-bar'))
         return
       }
-    },
-    [selectedAgentIds, deleteAgent, clearSelection, openPopoverCenter, fitView]
-  )
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [selectedAgentIds, deleteAgent, clearSelection, openPopoverCenter, fitView])
 
   // ------------------------------------------------------------------------
   // Type registration — memoised so react-flow does not remount nodes/edges
@@ -428,8 +431,6 @@ function CanvasInner() {
       ref={wrapperRef}
       data-coach="canvas"
       className="relative h-full w-full outline-none"
-      tabIndex={0}
-      onKeyDown={onKeyDownCanvas}
       onDoubleClick={onWrapperDoubleClick}
       style={
         {

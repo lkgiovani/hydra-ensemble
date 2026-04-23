@@ -199,10 +199,17 @@ export default function OrchestraView({ onBackToClassic }: Props) {
               onPickTemplate={handleUseTemplate}
               pending={creatingInline}
             />
-          ) : activeTeam && activeAgents.length === 0 ? (
-            <CanvasGhostState />
           ) : (
-            <Canvas />
+            <>
+              <Canvas />
+              {/* Ghost hint rendered ON TOP of the canvas so the user can
+                  still double-click / press A to open the New Agent popover
+                  even while the canvas is empty. `pointer-events-none`
+                  keeps every interaction going through to react-flow. */}
+              {activeTeam && activeAgents.length === 0 ? (
+                <CanvasGhostState />
+              ) : null}
+            </>
           )}
         </main>
 
@@ -305,13 +312,13 @@ function EmptyTeamsState({ onBlank, onPickTemplate, pending }: EmptyTeamsStatePr
 
 function CanvasGhostState() {
   return (
-    <div className="relative flex flex-1 items-center justify-center overflow-hidden">
-      <div className="pointer-events-none absolute inset-6 rounded-lg border-2 border-dashed border-border-soft" />
-      <div className="flex flex-col items-center gap-2 text-center">
+    <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+      <div className="absolute inset-6 rounded-lg border-2 border-dashed border-border-soft" />
+      <div className="relative flex flex-col items-center gap-2 text-center">
         <Plus size={28} strokeWidth={1.25} className="text-text-4" />
         <div className="text-sm text-text-2">No agents yet</div>
         <div className="font-mono text-[11px] text-text-4">
-          Double-click to add an agent, or press <kbd className="rounded-sm border border-border-soft bg-bg-3 px-1 py-0.5 text-[10px] text-text-2">A</kbd>
+          Double-click the canvas or press <kbd className="rounded-sm border border-border-soft bg-bg-3 px-1 py-0.5 text-[10px] text-text-2">A</kbd>
         </div>
       </div>
     </div>
