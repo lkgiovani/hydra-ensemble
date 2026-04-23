@@ -14,6 +14,7 @@ import SkillsTab from './SkillsTab'
 import TriggersTab from './TriggersTab'
 import InboxTab from './InboxTab'
 import OverviewTab from './OverviewTab'
+import { Tabs, type TabDef } from '../../ui'
 
 /**
  * Right-hand Inspector drawer for a single selected agent.
@@ -38,7 +39,7 @@ type TabKey =
 // the live message log and the pause/stop controls; inbox keeps task
 // messaging. Prompt/console files stay on disk so we can re-surface
 // them behind a dev affordance later without a rewrite.
-const TABS: ReadonlyArray<{ key: TabKey; label: string }> = [
+const TABS: ReadonlyArray<TabDef<TabKey>> = [
   { key: 'overview', label: 'overview' },
   { key: 'identity', label: 'identity' },
   { key: 'soul', label: 'soul' },
@@ -167,42 +168,13 @@ export default function Inspector() {
             </button>
           </header>
 
-          <nav
-            className="df-scroll flex shrink-0 items-center gap-0.5 overflow-x-auto overflow-y-hidden whitespace-nowrap border-b border-border-soft bg-bg-2 px-2 py-1.5"
-            role="tablist"
-            aria-label="inspector sections"
-            onWheel={(e) => {
-              // Browsers only translate vertical wheel → horizontal scroll
-              // when shift is held. For a tab strip the user expects plain
-              // wheel to work, so forward deltaY onto the container's
-              // scrollLeft. Only kicks in when there's actual overflow —
-              // otherwise we'd accidentally eat vertical scrolls from
-              // pages that nest a tab bar.
-              if (e.currentTarget.scrollWidth > e.currentTarget.clientWidth) {
-                e.currentTarget.scrollLeft += e.deltaY
-              }
-            }}
-          >
-            {TABS.map((t) => {
-              const selected = activeTab === t.key
-              return (
-                <button
-                  key={t.key}
-                  type="button"
-                  role="tab"
-                  aria-selected={selected}
-                  onClick={() => setActiveTab(t.key)}
-                  className={`shrink-0 rounded-sm px-2 py-1 text-[11px] font-medium lowercase transition ${
-                    selected
-                      ? 'bg-accent-500/15 text-accent-400'
-                      : 'text-text-3 hover:bg-bg-3 hover:text-text-1'
-                  }`}
-                >
-                  {t.label}
-                </button>
-              )
-            })}
-          </nav>
+          <Tabs
+            tabs={TABS}
+            value={activeTab}
+            onChange={setActiveTab}
+            ariaLabel="inspector sections"
+            scroll
+          />
 
           <div className="df-scroll min-h-0 flex-1 overflow-y-auto">
             {activeTab === 'overview' && (
