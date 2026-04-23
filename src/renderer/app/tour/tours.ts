@@ -305,8 +305,11 @@ export const TERMINALS_TOUR: Tour = {
   ]
 }
 
-/** Wire every tour into the store once, at module load. Safe to call
- *  multiple times because `register` is idempotent on tour.id. */
+/** Wire every tour into the store. Called eagerly on module load
+ *  (the IIFE below) so anyone who imports this file triggers
+ *  registration before the first component renders. Exported for
+ *  callers that want to re-register after a hot-reload / swap of the
+ *  tour schema without restarting the app. */
 export function registerBuiltInTours(): void {
   const store = useTour.getState()
   store.register(WELCOME_TOUR)
@@ -315,3 +318,13 @@ export function registerBuiltInTours(): void {
   store.register(TOOLKIT_TOUR)
   store.register(TERMINALS_TOUR)
 }
+
+// Run once on import. Previously the registration rode on a useMemo
+// inside App.tsx — React 19 Strict Mode re-evaluates useMemo, and the
+// 'replay tutorial' button on Welcome could fire startTour('welcome')
+// before useMemo finished registering, so start() silently no-op'd
+// because `tours['welcome']` was undefined. Moving to module load
+// removes the race entirely: any `import … from './tours'` (including
+// App.tsx) guarantees registration happens before any component
+// renders.
+registerBuiltInTours()

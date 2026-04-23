@@ -73,16 +73,14 @@ import HeaderButton from './app/HeaderButton'
 import Welcome from './app/Welcome'
 import TourHost from './app/tour/TourHost'
 import TourLauncher from './app/tour/TourLauncher'
-import { registerBuiltInTours } from './app/tour/tours'
+// Side-effect import — the module registers built-in tours on load.
+import './app/tour/tours'
 
 export default function App() {
   const claudePath = useBootstrap()
-  // Register the built-in tours once at mount. The store dedupes on
-  // id so calling this twice (Strict Mode) is cheap. Tours are
-  // user-initiated only — no auto-start. The primary discovery point
-  // is the 'Tutorial' button on the Welcome screen (visible when no
-  // sessions exist); the header launcher is the replay path.
-  useMemo(() => registerBuiltInTours(), [])
+  // Tour registration happens at module load inside ./app/tour/tours.
+  // Tours are user-initiated only — primary discovery is the Tutorial
+  // button on the Welcome screen; header launcher is the replay path.
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
