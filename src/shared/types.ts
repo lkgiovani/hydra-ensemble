@@ -519,6 +519,8 @@ export interface HydraEnsembleApi {
       opts?: ReplaceInFilesOptions
     ) => Promise<ReplaceInFilesResult>
     claudeDirs: (cwd: string | null) => Promise<{ project: string | null; global: string | null }>
+    copyPath: (src: string, destDir: string) => Promise<string>
+    deletePath: (path: string) => Promise<void>
   }
   gh: {
     listPRs: (cwd: string) => Promise<GitOpResult<PRInfo[]>>

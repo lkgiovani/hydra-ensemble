@@ -186,7 +186,11 @@ const api: HydraEnsembleApi = {
       opts?: { caseSensitive?: boolean; wholeWord?: boolean; regex?: boolean }
     ) =>
       ipcRenderer.invoke('editor:replaceInFiles', { cwd, query, replacement, opts }),
-    claudeDirs: (cwd: string | null) => ipcRenderer.invoke('editor:claudeDirs', cwd)
+    claudeDirs: (cwd: string | null) => ipcRenderer.invoke('editor:claudeDirs', cwd),
+    copyPath: (src: string, destDir: string): Promise<string> =>
+      ipcRenderer.invoke('editor:copyPath', { src, destDir }),
+    deletePath: (path: string): Promise<void> =>
+      ipcRenderer.invoke('editor:deletePath', path)
   },
   gh: {
     listPRs: (cwd: string): Promise<GitOpResult<PRInfo[]>> =>
