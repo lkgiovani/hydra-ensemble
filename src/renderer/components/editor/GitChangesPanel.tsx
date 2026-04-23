@@ -144,6 +144,9 @@ export default function GitChangesPanel({ cwd }: Props) {
 
   const [loading, setLoading] = useState<boolean>(false)
   const [generating, setGenerating] = useState<boolean>(false)
+  /** Seconds since the last generate-AI click — drives the "drafting… (12s)"
+   *  label so the user knows the CLI is still alive during long diffs. */
+  const [generateElapsed, setGenerateElapsed] = useState<number>(0)
   const [committing, setCommitting] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -490,7 +493,15 @@ export default function GitChangesPanel({ cwd }: Props) {
   const onGenerate = useCallback(async (): Promise<void> => {
     if (!cwd || generating) return
     setGenerating(true)
+    setGenerateElapsed(0)
     setError(null)
+    const startedAt = Date.now()
+    // 1-Hz tick so the button reads "drafting… (7s)" instead of spinning
+    // silently. Claude on a big diff can legitimately take 30-60s; without
+    // feedback users assume it's frozen and cancel.
+    const tick = window.setInterval(() => {
+      setGenerateElapsed(Math.floor((Date.now() - startedAt) / 1000))
+    }, 1000)
     try {
       const res = await window.api.git.generateCommitMessage(cwd, rules)
       if (!res.ok) {
@@ -501,7 +512,9 @@ export default function GitChangesPanel({ cwd }: Props) {
     } catch (err) {
       setError((err as Error).message)
     } finally {
+      window.clearInterval(tick)
       setGenerating(false)
+      setGenerateElapsed(0)
     }
   }, [cwd, generating, rules])
 
@@ -705,7 +718,11 @@ export default function GitChangesPanel({ cwd }: Props) {
               ) : (
                 <Sparkles size={10} strokeWidth={1.75} />
               )}
-              {generating ? 'drafting…' : 'generate with AI'}
+              {generating
+                ? generateElapsed > 0
+                  ? `drafting… (${generateElapsed}s)`
+                  : 'drafting…'
+                : 'generate with AI'}
             </button>
             <button
               type="button"

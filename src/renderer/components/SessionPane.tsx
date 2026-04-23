@@ -33,6 +33,10 @@ export default function SessionPane({ session, visible }: Props) {
   const [exited, setExited] = useState<ExitInfo | null>(null)
   const [restarting, setRestarting] = useState(false)
   const [starting, setStarting] = useState(true)
+  /** Flipped to true by the 4s watchdog so the overlay degrades from a
+   *  generic spinner into an actionable "stuck?" card with a force-open
+   *  button. 12s auto-flips `starting=false` regardless. */
+  const [startSlow, setStartSlow] = useState(false)
   const destroySession = useSessions((s) => s.destroySession)
 
   useEffect(() => {
@@ -80,11 +84,17 @@ export default function SessionPane({ session, visible }: Props) {
     }
 
     setStarting(true)
+    setStartSlow(false)
     setExited(null)
-    const startTimeout = setTimeout(() => {
-      // If we still haven't received any data after 4s, leave the overlay
-      // visible so the user knows something is wrong.
-    }, 4000)
+    // Two-stage watchdog.
+    //   4s: flip `startSlow=true` so the overlay says "taking longer than
+    //        usual" with an escape hatch button instead of a generic spinner.
+    //   12s: force-hide the overlay regardless. PTY data may have raced an
+    //        HMR remount — the listener registered late and missed the
+    //        first-byte broadcast (webContents.send doesn't buffer). The
+    //        xterm surface stays interactive; the user can type and resume.
+    const slowTimer = setTimeout(() => setStartSlow(true), 4000)
+    const escapeTimer = setTimeout(() => setStarting(false), 12000)
 
     const offData = window.api.pty.onData((evt) => {
       if (evt.sessionId !== ptyId) return
@@ -138,7 +148,8 @@ export default function SessionPane({ session, visible }: Props) {
     ro.observe(container)
 
     return () => {
-      clearTimeout(startTimeout)
+      clearTimeout(slowTimer)
+      clearTimeout(escapeTimer)
       if (resizeTimer) clearTimeout(resizeTimer)
       ro.disconnect()
       offData()
@@ -222,11 +233,50 @@ export default function SessionPane({ session, visible }: Props) {
       ) : null}
 
       {starting && !exited ? (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-bg-1/60 backdrop-blur-[2px]">
-          <div className="flex items-center gap-2 rounded-sm border border-border-soft bg-bg-3/90 px-3 py-2 font-mono text-[11px] text-text-3 shadow-pop df-fade-in">
-            <Loader2 size={12} strokeWidth={2} className="animate-spin text-accent-400" />
-            <span>warming up agent…</span>
-          </div>
+        /* pointer-events: while hot, the overlay is non-interactive so it
+           doesn't block clicks if data arrives milliseconds later. Once
+           `startSlow` flips, the inner card becomes clickable so the user
+           can force-open the terminal or restart the PTY. */
+        <div
+          className={`absolute inset-0 flex items-center justify-center bg-bg-1/60 backdrop-blur-[2px] ${startSlow ? '' : 'pointer-events-none'}`}
+        >
+          {startSlow ? (
+            <div className="flex w-72 flex-col gap-2 border border-border-mid bg-bg-2 px-3 py-2.5 font-mono text-[11px] text-text-2 shadow-pop df-fade-in" style={{ borderRadius: 'var(--radius-md)' }}>
+              <div className="flex items-center gap-2">
+                <Loader2 size={12} strokeWidth={2} className="animate-spin text-status-thinking" />
+                <span className="text-text-1">taking longer than usual…</span>
+              </div>
+              <p className="leading-snug text-text-3">
+                No PTY output yet. This can happen after a hot-reload —
+                the listener sometimes races the first byte. Opening the
+                terminal manually is safe; it's live underneath.
+              </p>
+              <div className="flex items-center gap-1.5 pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => setStarting(false)}
+                  className="flex-1 rounded-sm border border-border-mid bg-bg-3 px-2 py-1 text-[10px] text-text-1 hover:bg-bg-4"
+                >
+                  open terminal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStarting(false)
+                    void restart()
+                  }}
+                  className="flex-1 rounded-sm border border-accent-500/40 bg-accent-500/10 px-2 py-1 text-[10px] text-accent-200 hover:bg-accent-500/20"
+                >
+                  restart PTY
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 rounded-sm border border-border-soft bg-bg-3/90 px-3 py-2 font-mono text-[11px] text-text-3 shadow-pop df-fade-in">
+              <Loader2 size={12} strokeWidth={2} className="animate-spin text-accent-400" />
+              <span>warming up agent…</span>
+            </div>
+          )}
         </div>
       ) : null}
 

@@ -115,12 +115,17 @@ export class CommitAiService {
         resolve(result)
       }
 
-      // Safety timeout — claude should respond well inside 60s, but guard
-      // against a hang so the UI doesn't spin forever.
+      // Safety timeout — claude should respond well inside 120s, but
+      // guard against a hang so the UI doesn't spin forever. Big diffs
+      // on cold caches can easily take a minute with Sonnet; 60s was
+      // tripping before the model even finished streaming.
       const timer = setTimeout(() => {
         child.kill('SIGTERM')
-        settle({ ok: false, error: 'claude timed out generating commit message' })
-      }, 60_000)
+        settle({
+          ok: false,
+          error: `claude timed out after 120s generating commit message (model=${model}, diff=${diff.length}B)`
+        })
+      }, 120_000)
 
       child.stdout?.on('data', (chunk: Buffer) => {
         stdout += chunk.toString('utf-8')
