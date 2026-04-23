@@ -88,6 +88,10 @@ export interface AgentHostOptions {
   agent: Agent
   team: Team
   apiKey: string
+  /** Absolute path to the claude binary. When unset, the runner falls
+   *  back to spawning `claude` with PATH resolution — fragile when the
+   *  app was launched from a GUI without a login shell. */
+  claudePath?: string
   onMessage: (entry: Omit<MessageLog, 'id' | 'at'>) => void
   onStateChange: (next: AgentState) => void
   onDelegate: (
@@ -153,6 +157,13 @@ export class AgentHost {
     // Strip CLAUDE_CONFIG_DIR for isolation (see PLAN.md §14) — the CLI
     // path wants ~/.claude, and the SDK path doesn't read it either.
     delete env.CLAUDE_CONFIG_DIR
+
+    // Pass an explicit claude binary path when the host provides one —
+    // that's the only reliable way to find `claude` when Electron was
+    // launched from a GUI and PATH doesn't include the npm global bin.
+    if (this.opts.claudePath && this.opts.claudePath.trim().length > 0) {
+      env.HYDRA_CLAUDE_PATH = this.opts.claudePath
+    }
 
     const child = forkImpl(runnerPath, [], {
       env,

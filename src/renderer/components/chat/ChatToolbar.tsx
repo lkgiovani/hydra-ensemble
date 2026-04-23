@@ -166,8 +166,23 @@ export default function ChatToolbar({
     return () => window.removeEventListener('mousedown', onClick)
   }, [modelOpen, effortOpen, commandsOpen])
 
+  // Optimistic pick: the toolbar shows the model the user just clicked
+  // even before Claude Code echoes the switch back through JSONL. Without
+  // this the label stayed on "sonnet" forever on the user's box because
+  // currentModel updates depend on the session emitting a new model
+  // field — we don't want the UI to lie about the pending choice.
+  const [pendingModel, setPendingModel] = useState<Model | null>(null)
+
+  // Clear the optimistic pick once the session reports the new model.
+  useEffect(() => {
+    if (!pendingModel) return
+    const current = (currentModel ?? '').toLowerCase()
+    if (current.includes(pendingModel)) setPendingModel(null)
+  }, [currentModel, pendingModel])
+
   const pickModel = (m: Model): void => {
     setModelOpen(false)
+    setPendingModel(m)
     // Claude Code accepts `/model <name>` at the prompt.
     onSend(`/model ${m}`)
   }
@@ -182,7 +197,7 @@ export default function ChatToolbar({
     onSend(cmd.slash)
   }
 
-  const modelLabel = (currentModel ?? 'sonnet').toLowerCase()
+  const modelLabel = (pendingModel ?? currentModel ?? 'sonnet').toLowerCase()
 
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-border-soft bg-bg-1 px-3 py-2 text-xs">

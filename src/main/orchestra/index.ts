@@ -8,24 +8,22 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { exec as execCb } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { promisify } from 'node:util'
+import { resolveClaudePath } from '../claude/resolve'
 
-const execAsync = promisify(execCb)
-
-/** Probe whether `claude` is resolvable on PATH. Cached after first call
- *  so task dispatch isn't gated on a `which` shell-out every time. */
-let claudeCliCache: boolean | null = null
-async function claudeCliAvailable(): Promise<boolean> {
-  if (claudeCliCache !== null) return claudeCliCache
-  try {
-    await execAsync(process.platform === 'win32' ? 'where claude' : 'command -v claude')
-    claudeCliCache = true
-  } catch {
-    claudeCliCache = false
-  }
+/** Check whether the claude binary exists on disk. Caches the first hit
+ *  so task dispatch isn't gated on filesystem lookups. Uses the same
+ *  multi-path resolver the classic SessionManager relies on, so Orchestra
+ *  picks up the binary even when PATH is narrow (Electron launched from
+ *  a .desktop entry, macOS dock icon without a login shell, etc.). */
+let claudeCliCache: string | null | undefined
+function resolvedClaudePath(): string | null {
+  if (claudeCliCache !== undefined) return claudeCliCache
+  claudeCliCache = resolveClaudePath()
   return claudeCliCache
+}
+async function claudeCliAvailable(): Promise<boolean> {
+  return resolvedClaudePath() !== null
 }
 import {
   OrchestraRegistry,
@@ -605,6 +603,7 @@ export class OrchestraCore {
       agent,
       team,
       apiKey: this.apiKey ?? '',
+      claudePath: resolvedClaudePath() ?? undefined,
       onMessage: (entry) => { this.log.append(entry) },
       onStateChange: (next) => {
         try {

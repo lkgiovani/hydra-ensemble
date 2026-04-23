@@ -96,8 +96,13 @@ export function allBindings(overrides: Record<string, string>): Array<{ action: 
  */
 export function isBoundEvent(e: KeyboardEvent): boolean {
   // Hardcoded session jump (App.tsx keeps this out of ACTIONS because
-  // nine slots would clutter the keybind editor).
-  if (hasMod(e) && !e.shiftKey && /^[0-9]$/.test(e.key)) return true
+  // nine slots would clutter the keybind editor). Check both `e.key`
+  // and `e.code` so this still catches the event when xterm is focused
+  // — some layouts / browsers hand us the `Digit1`…`Digit0` code only.
+  if (hasMod(e) && !e.shiftKey) {
+    if (/^[0-9]$/.test(e.key)) return true
+    if (/^Digit[0-9]$/.test(e.code)) return true
+  }
   const { overrides } = useKeybinds.getState()
   for (const action of ACTIONS) {
     const combo = resolveBind(action.id, overrides)

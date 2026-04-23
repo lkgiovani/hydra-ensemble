@@ -251,13 +251,21 @@ export default function App() {
         (tag === 'input' || tag === 'textarea' || !!t?.isContentEditable)
 
       // Session jump 1..9 stays hardcoded — too many to expose as actions.
-      if (!inField && hasMod(e) && /^[0-9]$/.test(e.key) && !e.shiftKey) {
-        const idx = e.key === '0' ? 9 : Number.parseInt(e.key, 10) - 1
-        const target = sessions[idx]
-        if (!target) return
-        e.preventDefault()
-        setActive(target.id)
-        return
+      // Check both `e.key` and `e.code` so xterm (which normalises the
+      // key differently) doesn't swallow this before us.
+      if (!inField && hasMod(e) && !e.shiftKey) {
+        const digitFromKey = /^[0-9]$/.test(e.key) ? e.key : null
+        const digitFromCode = /^Digit([0-9])$/.exec(e.code)?.[1] ?? null
+        const digit = digitFromKey ?? digitFromCode
+        if (digit) {
+          const idx = digit === '0' ? 9 : Number.parseInt(digit, 10) - 1
+          const target = sessions[idx]
+          if (!target) return
+          e.preventDefault()
+          e.stopPropagation()
+          setActive(target.id)
+          return
+        }
       }
 
       // Generic dispatcher: walk every action and try to match its

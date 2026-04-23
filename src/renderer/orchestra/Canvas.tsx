@@ -509,6 +509,7 @@ function CanvasInner() {
       >
         <Background gap={GRID} size={1} />
         <Controls
+          position="top-right"
           showInteractive={false}
           className="!bg-[var(--color-bg-2)] !border !border-[var(--color-border-mid)]"
         />

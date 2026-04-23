@@ -534,8 +534,10 @@ async function runConversationCli(
   delete env.CLAUDE_CONFIG_DIR
   delete env.ANTHROPIC_API_KEY
 
+  const claudeBin = process.env.HYDRA_CLAUDE_PATH?.trim() || 'claude'
+
   return await new Promise<void>((resolve) => {
-    const child = spawn('claude', args, {
+    const child = spawn(claudeBin, args, {
       cwd: ctx.team.worktreePath,
       env,
       stdio: ['pipe', 'pipe', 'pipe']

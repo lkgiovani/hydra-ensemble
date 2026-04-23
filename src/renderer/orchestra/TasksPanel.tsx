@@ -126,20 +126,14 @@ export default function TasksPanel() {
       data-coach="tasks-panel"
       className="flex h-full w-full flex-col overflow-hidden border-l border-border-soft bg-bg-2 text-text-1"
     >
-      {/* Header — label + secondary icon-only shortcut. The primary CTA
-          lives just below so the user always has a full-width target. */}
+      {/* Header — label only. The full-width accent button below is the
+          dominant "create task" affordance; a tiny duplicate icon-button
+          here confused users asking "why two pluses?" */}
       <header className="flex items-center justify-between border-b border-border-soft bg-bg-1 px-3 py-2">
         <span className="df-label">tasks</span>
-        <button
-          type="button"
-          onClick={() => setDialogOpen(true)}
-          disabled={!canCreateTask}
-          className="flex h-5 w-5 items-center justify-center rounded-sm border border-border-soft bg-bg-2 text-text-3 hover:border-border-mid hover:bg-bg-3 hover:text-text-1 disabled:cursor-not-allowed disabled:opacity-50"
-          title={createDisabledReason}
-          aria-label="New task"
-        >
-          <Plus size={12} strokeWidth={2} />
-        </button>
+        <span className="font-mono text-[10px] text-text-4">
+          {teamTasks.length}
+        </span>
       </header>
 
       {/* Primary CTA — full-width accent button so "create a task" is the
