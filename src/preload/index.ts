@@ -142,8 +142,8 @@ const api: HydraEnsembleApi = {
       ipcRenderer.invoke('git:unstageFiles', { cwd, paths }),
     commit: (cwd: string, message: string) =>
       ipcRenderer.invoke('git:commit', { cwd, message }),
-    generateCommitMessage: (cwd: string) =>
-      ipcRenderer.invoke('git:generateCommitMessage', cwd)
+    generateCommitMessage: (cwd: string, rules?: string) =>
+      ipcRenderer.invoke('git:generateCommitMessage', { cwd, rules })
   },
   project: {
     list: (): Promise<ProjectMeta[]> => ipcRenderer.invoke('project:list'),
