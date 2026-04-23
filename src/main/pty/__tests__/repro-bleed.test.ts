@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { PtyStreamAnalyzer } from '/home/gengar/Templates/workspace2/Hydra/src/main/pty/analyzer'
-import { AnalyzerManager } from '/home/gengar/Templates/workspace2/Hydra/src/main/pty/analyzer-manager'
+import { PtyStreamAnalyzer } from '../analyzer'
+import { AnalyzerManager } from '../analyzer-manager'
 
 describe('state bleed repro', () => {
   beforeEach(() => vi.useFakeTimers())
