@@ -706,6 +706,7 @@ export default function GitChangesPanel({ cwd }: Props) {
               type="button"
               onClick={() => void onGenerate()}
               disabled={generating || files.length === 0}
+              data-tour-id="editor-generate-ai"
               className="flex items-center gap-1 rounded-sm border border-accent-500/40 bg-accent-500/10 px-2 py-0.5 font-mono text-[10px] text-accent-200 transition hover:bg-accent-500/20 disabled:cursor-not-allowed disabled:opacity-50"
               title={
                 files.length === 0

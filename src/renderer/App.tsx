@@ -74,28 +74,15 @@ import Welcome from './app/Welcome'
 import TourHost from './app/tour/TourHost'
 import TourLauncher from './app/tour/TourLauncher'
 import { registerBuiltInTours } from './app/tour/tours'
-import { useTour } from './app/tour/store'
 
 export default function App() {
   const claudePath = useBootstrap()
   // Register the built-in tours once at mount. The store dedupes on
-  // id so calling this twice (Strict Mode) is cheap. Also triggers
-  // the welcome tour on first boot — see the effect below.
+  // id so calling this twice (Strict Mode) is cheap. Tours are
+  // user-initiated only — no auto-start. The primary discovery point
+  // is the 'Tutorial' button on the Welcome screen (visible when no
+  // sessions exist); the header launcher is the replay path.
   useMemo(() => registerBuiltInTours(), [])
-  const completedTourIds = useTour((s) => s.completedIds)
-  const startTour = useTour((s) => s.start)
-  useMemo(() => {
-    // Auto-start the welcome tour when the user has no completed tours
-    // AND no sessions yet. Runs during the first render — subsequent
-    // renders short-circuit because completedIds populates once the
-    // tour runs to the end.
-    if (Object.keys(completedTourIds).length === 0) {
-      // Defer so the header + Welcome screen finish their first paint
-      // before the tour overlay takes the screen.
-      setTimeout(() => startTour('welcome'), 600)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)

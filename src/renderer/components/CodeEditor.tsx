@@ -458,7 +458,10 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
         >
           {/* Sidebar tabs: Search | Files | Changes. Search sits left of
               Files so Ctrl+Shift+F lands the user at the far-left anchor. */}
-          <div className="flex shrink-0 items-stretch border-b border-border-soft bg-bg-2">
+          <div
+            data-tour-id="editor-side-tabs"
+            className="flex shrink-0 items-stretch border-b border-border-soft bg-bg-2"
+          >
             {(['search', 'files', 'changes'] as const).map((tab) => {
               const Icon =
                 tab === 'files' ? FolderTree : tab === 'changes' ? GitCommit : SearchIcon
@@ -468,6 +471,7 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
                   key={tab}
                   type="button"
                   onClick={() => setSideTab(tab)}
+                  data-tour-id={tab === 'changes' ? 'editor-changes-tab' : undefined}
                   className={`flex flex-1 items-center justify-center gap-1.5 border-r border-border-soft px-2 py-1.5 font-mono text-[10px] uppercase tracking-[0.16em] last:border-r-0 transition ${
                     active
                       ? 'bg-bg-1 text-accent-300'

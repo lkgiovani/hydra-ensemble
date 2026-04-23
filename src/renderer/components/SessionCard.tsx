@@ -147,7 +147,7 @@ export default function SessionCard({
 
       {/* row 1: avatar + name + (hover actions | kbd badge) */}
       <div className="flex items-start gap-2.5">
-        <div className="relative">
+        <div className="relative" data-tour-id="session-avatar">
           <AgentAvatar session={session} size={28} />
           {unread ? (
             <span
@@ -250,7 +250,9 @@ export default function SessionCard({
       {/* row 2: state pill + branch · model + time-since-last-change */}
       <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px]">
         <div className="flex min-w-0 items-center gap-1.5">
-          <SessionStatePill state={session.state} />
+          <span data-tour-id="session-state-pill">
+            <SessionStatePill state={session.state} />
+          </span>
           {session.branch ? (
             <span className="flex min-w-0 items-center gap-1 text-text-3">
               <span className="text-text-4">·</span>
@@ -296,6 +298,7 @@ export default function SessionCard({
 
       {/* row 4: cost + tokens — tabular nums so columns line up across cards */}
       <div
+        data-tour-id="session-cost-tokens"
         className="mt-1 flex items-center gap-2 font-mono text-[10px] tabular-nums text-text-4"
         title={`input ${session.tokensIn ?? 0} tokens · output ${session.tokensOut ?? 0} tokens${
           session.cost != null ? ` · cost $${session.cost.toFixed(4)}` : ''
@@ -312,11 +315,12 @@ export default function SessionCard({
         {/* Context-window meter pinned to the far-right so its spark bar
              lines up across every card in the column. Hidden when we
              have no usage yet — no point drawing a 0% bar. */}
-        <ContextMeter
-          used={session.contextTokens}
-          model={session.model}
-          className="ml-auto"
-        />
+        <div data-tour-id="session-context-meter" className="ml-auto">
+          <ContextMeter
+            used={session.contextTokens}
+            model={session.model}
+          />
+        </div>
       </div>
     </div>
   )

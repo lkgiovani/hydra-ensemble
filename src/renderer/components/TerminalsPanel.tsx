@@ -254,7 +254,10 @@ export default function TerminalsPanel({ open, onClose }: Props) {
       ) : null}
 
       {/* tabs */}
-      <div className="df-scroll flex shrink-0 items-center gap-0.5 overflow-x-auto border-b border-border-soft bg-bg-1 px-2 pt-1.5">
+      <div
+        data-tour-id="terminals-tabs"
+        className="df-scroll flex shrink-0 items-center gap-0.5 overflow-x-auto border-b border-border-soft bg-bg-1 px-2 pt-1.5"
+      >
         {shells.length === 0 ? (
           <div className="px-3 py-2 text-[11px] text-text-4">no shells — click "new"</div>
         ) : null}

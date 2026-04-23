@@ -108,6 +108,7 @@ export default function ToolkitGrid({
             <button
               type="button"
               onClick={openEditor}
+              data-tour-id="toolkit-add"
               className="flex items-center gap-1 rounded-sm border border-border-soft bg-bg-3 px-2 py-1 text-[11px] text-text-2 transition hover:border-accent-500/50 hover:bg-bg-4 hover:text-text-1"
               title="edit toolkit commands"
             >
@@ -165,7 +166,10 @@ export default function ToolkitGrid({
         </div>
       ) : null}
 
-      <div className="df-scroll min-h-0 flex-1 overflow-y-auto p-2">
+      <div
+        data-tour-id="toolkit-grid"
+        className="df-scroll min-h-0 flex-1 overflow-y-auto p-2"
+      >
         {tab === 'bashes' ? (
           items.length === 0 ? (
             <EmptyState

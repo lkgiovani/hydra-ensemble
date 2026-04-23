@@ -1,9 +1,11 @@
 import * as React from 'react'
+import { Sparkles } from 'lucide-react'
 import { useSessions } from '../state/sessions'
 import { useProjects } from '../state/projects'
 import { useSpawnDialog } from '../state/spawn'
 import { fmtShortcut } from '../lib/platform'
 import { Kbd } from '../ui'
+import { useTour } from './tour/store'
 import logoUrl from '../assets/logo.png'
 
 /** Classic-shell welcome screen shown when no session is active.
@@ -18,12 +20,36 @@ export default function Welcome({
   const projects = useProjects((s) => s.projects)
   const currentPath = useProjects((s) => s.currentPath)
   const addProject = useProjects((s) => s.addProject)
+  const startTour = useTour((s) => s.start)
+  const completedTourIds = useTour((s) => s.completedIds)
+  const welcomeTaken = !!completedTourIds['welcome']
 
   return (
     <div className="df-hero-bg df-scroll flex flex-1 items-center justify-center overflow-y-auto px-8 py-12">
       <div className="w-full max-w-2xl df-fade-in">
         {/* Hero */}
         <div className="mb-8 text-center">
+          {/* Tutorial CTA — sits above the logo so first-time users
+               always see it before anything else. Primary discovery
+               point for the tour system. The header launcher stays
+               available as the replay path for experienced users. */}
+          <div className="mb-5 flex justify-center">
+            <button
+              type="button"
+              onClick={() => startTour('welcome')}
+              className="group relative inline-flex items-center gap-2 rounded-full border border-accent-500/50 bg-accent-500/10 px-4 py-1.5 font-mono text-[11px] uppercase tracking-[0.18em] text-accent-200 transition hover:bg-accent-500/20 hover:text-accent-100"
+            >
+              <span className="relative flex h-2 w-2">
+                {!welcomeTaken ? (
+                  <span className="absolute inset-0 animate-ping rounded-full bg-accent-400/70" />
+                ) : null}
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-accent-400" />
+              </span>
+              <Sparkles size={12} strokeWidth={1.75} />
+              <span>{welcomeTaken ? 'replay tutorial' : 'start tutorial'}</span>
+            </button>
+          </div>
+
           <div className="relative mx-auto mb-8 flex h-72 w-72 items-center justify-center">
             <div className="absolute inset-0 animate-ping rounded-full bg-accent-500/20" />
             <div className="absolute inset-4 rounded-full bg-accent-500/10 df-pulse" />
