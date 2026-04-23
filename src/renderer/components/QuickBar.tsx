@@ -4,37 +4,14 @@ import {
   Plus,
   Terminal,
   Code2,
-  HelpCircle,
-  PlayCircle
+  HelpCircle
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useSessions } from '../state/sessions'
 import { useProjects } from '../state/projects'
-import { useSlidePanel, useTerminalsPanel, type PanelKind } from '../state/panels'
+import { useSlidePanel, useTerminalsPanel } from '../state/panels'
 import { useSpawnDialog } from '../state/spawn'
-import { useTours } from '../tour/state'
 import { fmtShortcut, hasMod } from '../lib/platform'
-
-/**
- * Map the currently-open slide panel (or its absence) to the tour id that
- * covers that surface. Keeps the Tour button contextual — clicking it while
- * the editor is open launches the editor walkthrough rather than the
- * generic dashboard one.
- */
-const SURFACE_TOUR_BY_PANEL: Record<PanelKind, string> = {
-  dashboard: 'classic-overview',
-  editor: 'workspace-editor',
-  watchdogs: 'classic-overview',
-  pr: 'classic-overview',
-  terminals: 'classic-overview'
-}
-
-const DEFAULT_SURFACE_TOUR = 'classic-overview'
-
-function resolveSurfaceTourId(panel: PanelKind | null): string {
-  if (!panel) return DEFAULT_SURFACE_TOUR
-  return SURFACE_TOUR_BY_PANEL[panel] ?? DEFAULT_SURFACE_TOUR
-}
 
 interface ActionButtonProps {
   icon: LucideIcon
@@ -106,8 +83,6 @@ export default function QuickBar(_: Props) {
   const currentPanel = useSlidePanel((s) => s.current)
   const toggleTerminals = useTerminalsPanel((s) => s.toggle)
 
-  const completedTours = useTours((s) => s.completedTours)
-
   const searchRef = useRef<HTMLInputElement>(null)
 
   const projectName = useMemo(() => {
@@ -128,12 +103,6 @@ export default function QuickBar(_: Props) {
     const segs = path.split('/').filter(Boolean)
     return segs[segs.length - 1] ?? null
   }, [activeSession?.worktreePath, worktrees])
-
-  const surfaceTourId = useMemo(
-    () => resolveSurfaceTourId(currentPanel),
-    [currentPanel]
-  )
-  const tourPulse = !completedTours[surfaceTourId]
 
   const openPalette = () => {
     window.dispatchEvent(new CustomEvent('orchestra:search-toggle'))
@@ -163,12 +132,6 @@ export default function QuickBar(_: Props) {
       searchRef.current?.blur()
       openPalette()
     }, 0)
-  }
-
-  const handleTour = () => {
-    window.dispatchEvent(
-      new CustomEvent('app:open-tour', { detail: { id: surfaceTourId } })
-    )
   }
 
   const searchPlaceholder = `Search sessions, commands, files… (${fmtShortcut('K')})`
@@ -266,13 +229,6 @@ export default function QuickBar(_: Props) {
             window.dispatchEvent(new CustomEvent('app:open-help'))
           }}
           testId="quickbar-help"
-        />
-        <ActionButton
-          icon={PlayCircle}
-          label="Tour"
-          onClick={handleTour}
-          pulse={tourPulse}
-          testId="quickbar-tour"
         />
       </div>
     </div>

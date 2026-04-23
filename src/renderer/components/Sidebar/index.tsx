@@ -84,7 +84,6 @@ export default function Sidebar() {
   const worktrees = useProjects((s) => s.worktrees)
   const loadingWorktrees = useProjects((s) => s.loadingWorktrees)
   const error = useProjects((s) => s.error)
-  const init = useProjects((s) => s.init)
   const addProject = useProjects((s) => s.addProject)
   const removeProject = useProjects((s) => s.removeProject)
   const setCurrent = useProjects((s) => s.setCurrent)
@@ -157,10 +156,6 @@ export default function Sidebar() {
     }
     return byTeam
   }, [orchestraTeams, orchestraAgents])
-
-  useEffect(() => {
-    void init()
-  }, [init])
 
   // Auto-expand the active project so its worktrees are visible by default.
   useEffect(() => {

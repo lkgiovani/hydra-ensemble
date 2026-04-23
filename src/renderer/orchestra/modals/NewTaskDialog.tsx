@@ -90,16 +90,17 @@ export default function NewTaskDialog({ open, onClose }: Props) {
     return () => window.clearTimeout(t)
   }, [open])
 
-  // Esc cancels — gated on `!submitting` so mid-flight submissions aren't
-  // interrupted visually while the IPC is still in flight.
+  // Esc always cancels. The submit IPC now returns as soon as routing is
+  // done (the agent runs asynchronously in main), so holding the modal
+  // open while "submitting" is active no longer accomplishes anything.
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape' && !submitting) onClose()
+      if (e.key === 'Escape') onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [open, submitting, onClose])
+  }, [open, onClose])
 
   const commitTagDraft = useCallback((raw: string): void => {
     const parts = raw
@@ -195,7 +196,7 @@ export default function NewTaskDialog({ open, onClose }: Props) {
     <div
       className="df-fade-in fixed inset-0 z-[70] flex items-center justify-center bg-bg-0/85 backdrop-blur-md"
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget && !submitting) onClose()
+        if (e.target === e.currentTarget) onClose()
       }}
       role="dialog"
       aria-modal="true"
@@ -212,8 +213,7 @@ export default function NewTaskDialog({ open, onClose }: Props) {
           <button
             type="button"
             onClick={onClose}
-            disabled={submitting}
-            className="rounded-sm p-1 text-text-3 hover:bg-bg-3 hover:text-text-1 disabled:opacity-40"
+            className="rounded-sm p-1 text-text-3 hover:bg-bg-3 hover:text-text-1"
             aria-label="close"
           >
             <X size={12} strokeWidth={1.75} />
@@ -382,8 +382,7 @@ export default function NewTaskDialog({ open, onClose }: Props) {
           <button
             type="button"
             onClick={onClose}
-            disabled={submitting}
-            className="rounded-sm border border-border-soft px-2.5 py-1 text-[11px] text-text-2 hover:border-border-mid hover:bg-bg-3 disabled:opacity-40"
+            className="rounded-sm border border-border-soft px-2.5 py-1 text-[11px] text-text-2 hover:border-border-mid hover:bg-bg-3"
           >
             Cancel
           </button>

@@ -100,6 +100,31 @@ export const useRightColumnSize = create<RightColumnSizeState>()(
   )
 )
 
+/** Orchestra Inspector drawer width. Mounted on the right edge; user
+ *  drags its LEFT edge to resize. Min wide enough for the tab bar, max
+ *  capped so the canvas stays usable. */
+export const INSPECTOR_WIDTH_MIN = 320
+export const INSPECTOR_WIDTH_MAX = 720
+export const INSPECTOR_WIDTH_DEFAULT = 420
+
+interface InspectorSizeState {
+  width: number
+  setWidth: (value: number) => void
+}
+
+export const useInspectorSize = create<InspectorSizeState>()(
+  persist(
+    (set) => ({
+      width: INSPECTOR_WIDTH_DEFAULT,
+      setWidth: (value) => {
+        const clamped = Math.min(INSPECTOR_WIDTH_MAX, Math.max(INSPECTOR_WIDTH_MIN, value))
+        set({ width: clamped })
+      }
+    }),
+    { name: 'hydra.inspector-size' }
+  )
+)
+
 /** Terminals panel has two layouts the user picks from the in-panel view
  *  menu: a bottom strip inside the main column ('bottom' — default, stacked
  *  below the slide pane) or the classic right-side slide pane slot ('side',

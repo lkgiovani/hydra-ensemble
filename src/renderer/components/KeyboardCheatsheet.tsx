@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Keyboard, PlayCircle, Search, X } from 'lucide-react'
+import { Keyboard, Search, X } from 'lucide-react'
 import { ACTIONS, allBindings, useKeybinds } from '../state/keybinds'
 import { formatCombo } from '../lib/keybind'
 import { Kbd } from '../ui'
@@ -231,11 +231,6 @@ export default function KeyboardCheatsheet({ open, onClose }: Props) {
 
   const totalVisible = sections.reduce((n, s) => n + s.rows.length, 0)
 
-  const handleTour = (): void => {
-    window.dispatchEvent(new CustomEvent('app:open-tour', { detail: { id: 'classic-overview' } }))
-    onClose()
-  }
-
   if (!open) return null
 
   return (
@@ -326,15 +321,7 @@ export default function KeyboardCheatsheet({ open, onClose }: Props) {
           )}
         </div>
 
-        <footer className="flex items-center justify-between gap-3 border-t border-border-soft bg-bg-1 px-4 py-2 font-mono text-[10px] text-text-4">
-          <button
-            type="button"
-            onClick={handleTour}
-            className="inline-flex items-center gap-1.5 rounded-sm border border-border-soft bg-bg-2 px-2 py-1 text-[10px] text-text-2 hover:border-accent-500/50 hover:bg-bg-3 hover:text-text-1"
-          >
-            <PlayCircle size={12} strokeWidth={1.75} className="text-accent-400" />
-            view tour
-          </button>
+        <footer className="flex items-center justify-end gap-3 border-t border-border-soft bg-bg-1 px-4 py-2 font-mono text-[10px] text-text-4">
           <span>
             press <span className="mx-1"><Kbd>?</Kbd></span> or{' '}
             <span className="mx-1"><Kbd>Esc</Kbd></span> to close

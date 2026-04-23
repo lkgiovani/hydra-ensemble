@@ -27,6 +27,15 @@ const safe = async <T,>(fn: () => Promise<T>, fallback: T, label: string): Promi
   }
 }
 
+// Module-level guards so init() stays idempotent even if multiple
+// components (App + Sidebar + OrchestraView…) call it on mount. Without
+// these, each call re-subscribed to `project:changed`, multiplying
+// state updates per event and — under React strict-mode double-mount —
+// creating a storm large enough to trip React's "max update depth"
+// safety net from Sidebar selectors.
+let initStarted = false
+let initPromise: Promise<void> | null = null
+
 export const useProjects = create<ProjectsState>((set, get) => ({
   projects: [],
   currentPath: null,
@@ -35,6 +44,10 @@ export const useProjects = create<ProjectsState>((set, get) => ({
   error: null,
 
   init: async () => {
+    if (initPromise) return initPromise
+    if (initStarted) return
+    initStarted = true
+    initPromise = (async () => {
     try {
       const [projects, current] = await Promise.all([
         window.api.project.list(),
@@ -44,6 +57,14 @@ export const useProjects = create<ProjectsState>((set, get) => ({
       window.api.project.onChange((next) => {
         set((prev) => {
           const stillExists = prev.currentPath && next.some((p) => p.path === prev.currentPath)
+          // Bail out when nothing actually changed — returning `prev` would
+          // still trip zustand's shallow compare because `projects: next` is
+          // a fresh array reference on every IPC hop. Checking content lets
+          // Sidebar skip the re-render entirely.
+          const sameProjects =
+            prev.projects.length === next.length &&
+            prev.projects.every((p, i) => p.path === next[i]?.path && p.name === next[i]?.name)
+          if (sameProjects && (stillExists || prev.currentPath === null)) return prev
           return {
             projects: next,
             currentPath: stillExists ? prev.currentPath : (next[0]?.path ?? null)
@@ -57,7 +78,13 @@ export const useProjects = create<ProjectsState>((set, get) => ({
       // eslint-disable-next-line no-console
       console.warn('[projects] init failed:', err)
       set({ projects: [], currentPath: null, error: message })
+      // Let callers retry after a failure.
+      initStarted = false
+    } finally {
+      initPromise = null
     }
+    })()
+    return initPromise
   },
 
   refresh: async () => {

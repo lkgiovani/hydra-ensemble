@@ -31,8 +31,6 @@ import NewSessionDialog from './components/NewSessionDialog'
 import TerminalsPanel from './components/TerminalsPanel'
 import WindowControls from './components/WindowControls'
 import OrchestraView from './orchestra/OrchestraView'
-import TourPlayer from './tour/TourPlayer'
-import TourLauncher from './tour/TourLauncher'
 import WelcomeScreen from './components/WelcomeScreen'
 import { Kbd } from './ui'
 
@@ -632,12 +630,6 @@ export default function App() {
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <HelpOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />
       <NewSessionDialog open={spawnOpen} onClose={hideSpawn} />
-
-      {/* Tour overlay + launcher — render globally so every surface can
-          trigger a guided walkthrough. Visible by default for first-time
-          users; the launcher hides completed tours. */}
-      <TourPlayer />
-      <TourLauncher />
 
       {/* First-run welcome screen — only the very first time the user
           opens the app. After dismissal writes hydra.welcome.shown. */}

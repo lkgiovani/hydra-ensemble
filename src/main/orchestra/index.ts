@@ -368,11 +368,37 @@ export class OrchestraCore {
     if (!host) return this.failTask(routing.id, 'agent not found')
 
     const topology = await this.buildTopologySnapshot(chosenId, team.id)
-    const result = await host.runTask(routing, [topology])
-    if (!result.ok) return this.failTask(routing.id, result.error)
 
+    // Flip to in_progress and return to the renderer BEFORE awaiting the
+    // agent's full turn. runTask only resolves when the runner sends
+    // 'done' — awaiting it here would freeze the submit IPC for the
+    // entire agent lifecycle (often minutes), leaving NewTaskDialog
+    // stuck on "submitting…" with Cancel disabled. The UI observes
+    // progress via `task.changed` emits; completion/failure lands via
+    // the detached handler below.
     const inProgress = this.patchTask(task.id, { status: 'in_progress' })
     this.emit({ kind: 'task.changed', task: inProgress })
+
+    void host
+      .runTask(routing, [topology])
+      .then((result) => {
+        if (!result.ok) {
+          this.failTask(routing.id, result.error)
+          return
+        }
+        const done = this.patchTask(task.id, {
+          status: 'done',
+          finishedAt: new Date().toISOString()
+        })
+        this.emit({ kind: 'task.changed', task: done })
+      })
+      .catch((err: unknown) => {
+        this.failTask(
+          routing.id,
+          err instanceof Error ? err.message : 'runner crashed'
+        )
+      })
+
     return inProgress
   }
 

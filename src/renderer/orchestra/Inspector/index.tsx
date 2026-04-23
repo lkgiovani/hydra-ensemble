@@ -1,7 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { useOrchestra } from '../state/orchestra'
 import { defaultAgentColor } from '../../lib/agent'
+import {
+  useInspectorSize,
+  INSPECTOR_WIDTH_MIN,
+  INSPECTOR_WIDTH_MAX
+} from '../../state/panels'
 import IdentityTab from './IdentityTab'
 import RuntimeTab from './RuntimeTab'
 import SoulTab from './SoulTab'
@@ -48,6 +53,38 @@ export default function Inspector() {
   const selectedAgentIds = useOrchestra((s) => s.selectedAgentIds)
   const agents = useOrchestra((s) => s.agents)
   const setInspectorOpen = useOrchestra((s) => s.setInspectorOpen)
+  const width = useInspectorSize((s) => s.width)
+  const setWidth = useInspectorSize((s) => s.setWidth)
+
+  // Drag-to-resize handle on the LEFT edge. Mouse-only; a touch variant
+  // would need pointermove which adds capture-phase complexity and no
+  // real Orchestra user runs this on tablet anyway.
+  const dragRef = useRef<{ startX: number; startW: number } | null>(null)
+  const onResizeStart = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      e.preventDefault()
+      dragRef.current = { startX: e.clientX, startW: width }
+      const onMove = (ev: MouseEvent): void => {
+        if (!dragRef.current) return
+        // Dragging LEFT widens the panel because the panel is anchored
+        // to the right edge of the viewport.
+        const delta = dragRef.current.startX - ev.clientX
+        setWidth(dragRef.current.startW + delta)
+      }
+      const onUp = (): void => {
+        dragRef.current = null
+        window.removeEventListener('mousemove', onMove)
+        window.removeEventListener('mouseup', onUp)
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+      }
+      document.body.style.cursor = 'ew-resize'
+      document.body.style.userSelect = 'none'
+      window.addEventListener('mousemove', onMove)
+      window.addEventListener('mouseup', onUp)
+    },
+    [width, setWidth]
+  )
 
   // Active tab is session-local; resets to identity when the selected agent
   // changes so you don't land on a tab that's meaningless for the new one.
@@ -81,13 +118,28 @@ export default function Inspector() {
   return (
     <aside
       data-coach="inspector"
-      className={`fixed right-0 top-0 z-40 flex h-full w-[360px] flex-col border-l border-border-soft bg-bg-2 shadow-pop transition-transform duration-200 ease-out ${
+      style={{ width }}
+      className={`fixed right-0 top-0 z-40 flex h-full flex-col border-l border-border-soft bg-bg-2 shadow-pop transition-transform duration-200 ease-out ${
         visible ? 'translate-x-0' : 'translate-x-full pointer-events-none'
       }`}
       aria-hidden={!visible}
       role="complementary"
       aria-label="agent inspector"
     >
+      {/* Left-edge drag handle for resize. 6px hit area, 1px visible on
+          hover; cursor flips to ew-resize so the affordance is obvious. */}
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="resize inspector"
+        aria-valuemin={INSPECTOR_WIDTH_MIN}
+        aria-valuemax={INSPECTOR_WIDTH_MAX}
+        aria-valuenow={width}
+        onMouseDown={onResizeStart}
+        className="group absolute left-0 top-0 z-50 h-full w-1.5 -translate-x-1/2 cursor-ew-resize"
+      >
+        <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors group-hover:bg-accent-500/60" />
+      </div>
       {agent ? (
         <>
           <header className="flex shrink-0 items-center justify-between border-b border-border-soft bg-bg-1 px-3 py-2.5">
@@ -116,7 +168,7 @@ export default function Inspector() {
           </header>
 
           <nav
-            className="flex shrink-0 items-center gap-0.5 border-b border-border-soft bg-bg-2 px-2 py-1.5"
+            className="df-scroll flex shrink-0 items-center gap-0.5 overflow-x-auto overflow-y-hidden whitespace-nowrap border-b border-border-soft bg-bg-2 px-2 py-1.5"
             role="tablist"
             aria-label="inspector sections"
           >
@@ -129,7 +181,7 @@ export default function Inspector() {
                   role="tab"
                   aria-selected={selected}
                   onClick={() => setActiveTab(t.key)}
-                  className={`rounded-sm px-2 py-1 text-[11px] font-medium lowercase transition ${
+                  className={`shrink-0 rounded-sm px-2 py-1 text-[11px] font-medium lowercase transition ${
                     selected
                       ? 'bg-accent-500/15 text-accent-400'
                       : 'text-text-3 hover:bg-bg-3 hover:text-text-1'
