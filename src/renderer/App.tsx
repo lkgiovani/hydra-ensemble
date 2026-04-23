@@ -24,6 +24,7 @@ import ToolkitEditorDialog from './components/Toolkit/EditorDialog'
 import WatchdogPanel from './components/Watchdog/Panel'
 import WatchdogRuleDialog from './components/Watchdog/RuleDialog'
 import Toasts from './components/Toasts'
+import SessionReplyToaster from './components/SessionReplyToaster'
 import CommandPalette from './components/CommandPalette'
 import HelpOverlay from './components/HelpOverlay'
 import NewSessionDialog from './components/NewSessionDialog'
@@ -627,6 +628,7 @@ export default function App() {
       <ToolkitEditorDialog />
       <WatchdogRuleDialog />
       <Toasts />
+      <SessionReplyToaster />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <HelpOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />
       <NewSessionDialog open={spawnOpen} onClose={hideSpawn} />
