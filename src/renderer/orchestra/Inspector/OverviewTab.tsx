@@ -495,8 +495,8 @@ export default function OverviewTab({ agent, onSwitchTab }: Props) {
         title="latest activity"
         action={
           <SeeMoreLink
-            label="Open console"
-            onClick={() => onSwitchTab('console')}
+            label="Open runtime"
+            onClick={() => onSwitchTab('runtime')}
           />
         }
       >

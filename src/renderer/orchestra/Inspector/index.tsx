@@ -13,8 +13,6 @@ import SoulTab from './SoulTab'
 import SkillsTab from './SkillsTab'
 import TriggersTab from './TriggersTab'
 import InboxTab from './InboxTab'
-import ConsoleTab from './ConsoleTab'
-import PromptTab from './PromptTab'
 import OverviewTab from './OverviewTab'
 
 /**
@@ -31,21 +29,23 @@ type TabKey =
   | 'soul'
   | 'skills'
   | 'triggers'
-  | 'prompt'
   | 'inbox'
   | 'runtime'
-  | 'console'
 
+// `prompt` and `console` used to be separate tabs but were pure debug
+// surfaces (system-prompt preview, raw runner logs) that crowded the
+// nav without earning their space for day-to-day users. Runtime keeps
+// the live message log and the pause/stop controls; inbox keeps task
+// messaging. Prompt/console files stay on disk so we can re-surface
+// them behind a dev affordance later without a rewrite.
 const TABS: ReadonlyArray<{ key: TabKey; label: string }> = [
   { key: 'overview', label: 'overview' },
   { key: 'identity', label: 'identity' },
   { key: 'soul', label: 'soul' },
   { key: 'skills', label: 'skills' },
   { key: 'triggers', label: 'triggers' },
-  { key: 'prompt', label: 'prompt' },
   { key: 'inbox', label: 'inbox' },
-  { key: 'runtime', label: 'runtime' },
-  { key: 'console', label: 'console' }
+  { key: 'runtime', label: 'runtime' }
 ]
 
 export default function Inspector() {
@@ -171,6 +171,17 @@ export default function Inspector() {
             className="df-scroll flex shrink-0 items-center gap-0.5 overflow-x-auto overflow-y-hidden whitespace-nowrap border-b border-border-soft bg-bg-2 px-2 py-1.5"
             role="tablist"
             aria-label="inspector sections"
+            onWheel={(e) => {
+              // Browsers only translate vertical wheel → horizontal scroll
+              // when shift is held. For a tab strip the user expects plain
+              // wheel to work, so forward deltaY onto the container's
+              // scrollLeft. Only kicks in when there's actual overflow —
+              // otherwise we'd accidentally eat vertical scrolls from
+              // pages that nest a tab bar.
+              if (e.currentTarget.scrollWidth > e.currentTarget.clientWidth) {
+                e.currentTarget.scrollLeft += e.deltaY
+              }
+            }}
           >
             {TABS.map((t) => {
               const selected = activeTab === t.key
@@ -203,10 +214,8 @@ export default function Inspector() {
             {activeTab === 'soul' && <SoulTab agentId={agent.id} />}
             {activeTab === 'skills' && <SkillsTab agentId={agent.id} />}
             {activeTab === 'triggers' && <TriggersTab agentId={agent.id} />}
-            {activeTab === 'prompt' && <PromptTab agent={agent} />}
             {activeTab === 'inbox' && <InboxTab agent={agent} />}
             {activeTab === 'runtime' && <RuntimeTab agent={agent} />}
-            {activeTab === 'console' && <ConsoleTab agent={agent} />}
           </div>
         </>
       ) : null}
