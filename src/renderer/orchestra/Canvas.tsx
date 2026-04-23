@@ -42,20 +42,13 @@ import { ReportingEdge, type ReportingEdgeType } from './ReportingEdge'
 import { NewAgentPopover } from './modals/NewAgentPopover'
 import CanvasMinimap from './CanvasMinimap'
 
-/**
- * Orchestra canvas.
- *
- * Owns the react-flow surface for the active team: node ↔ agent mapping,
- * edge ↔ reporting-edge mapping, shortcuts (A/⌘0/Delete/Backspace//), the
- * new-agent popover placement, and the debounced write-through for node
- * position changes. See PRD §11–§13 and PLAN §9 for the contract.
- */
+/** Orchestra canvas: react-flow surface for the active team, shortcuts,
+ *  new-agent popover, and debounced position write-through. */
 
 const GRID = 16
 const POSITION_DEBOUNCE_MS = 200
 
-/** Build the react-flow node for an agent. Kept in module scope so equality
- *  checks in `useMemo` below are predictable. */
+/** Build a react-flow node for an agent (module-scope for stable refs). */
 function toRFNode(agent: Agent, isMain: boolean, selected: boolean): AgentNode {
   return {
     id: agent.id,
@@ -63,8 +56,6 @@ function toRFNode(agent: Agent, isMain: boolean, selected: boolean): AgentNode {
     position: agent.position,
     data: { agent, isMain },
     selected,
-    // react-flow's own drag handle is the whole card; inner buttons stop
-    // propagation where needed.
     draggable: true
   }
 }
@@ -75,8 +66,7 @@ function toRFEdge(edge: ReportingEdgeT): ReportingEdgeType {
     type: 'reporting',
     source: edge.parentAgentId,
     target: edge.childAgentId,
-    // Pin handles so the edge always descends from the parent's bottom to
-    // the child's top (see onConnect for the full rationale).
+    // Pin handles so the edge descends parent-bottom → child-top.
     sourceHandle: 's-s',
     targetHandle: 'n-t',
     data: { delegationMode: edge.delegationMode },
@@ -104,16 +94,15 @@ function CanvasInner() {
   const setInspectorOpen = useOrchestra((s) => s.setInspectorOpen)
   const pushToast = useToasts((s) => s.push)
 
-  const { fitView, screenToFlowPosition } = useReactFlow()
+  const { fitView, screenToFlowPosition, setViewport, getViewport } =
+    useReactFlow()
 
-  // The active team's main agent id drives the crown. Lookup is cheap and
-  // rebuilding the node array on every main change is the correct trigger.
+  // Active team's main agent id drives the crown.
   const mainAgentId = useMemo<UUID | null>(() => {
     const t = teams.find((x) => x.id === activeTeamId)
     return t?.mainAgentId ?? null
   }, [teams, activeTeamId])
 
-  // Filter domain state to the active team and derive react-flow arrays.
   const teamAgents = useMemo(
     () => allAgents.filter((a) => a.teamId === activeTeamId),
     [allAgents, activeTeamId]
@@ -138,9 +127,7 @@ function CanvasInner() {
   const [nodes, setNodes] = useNodesState<AgentNode>(derivedNodes)
   const [edges, setEdges] = useEdgesState<ReportingEdgeType>(derivedEdges)
 
-  // Sync local react-flow nodes/edges when the domain changes. We avoid
-  // replacing the array during an active drag: `position` changes we don't
-  // own flow through and would snap the dragged card mid-gesture.
+  // Sync local react-flow state when domain changes.
   useEffect(() => {
     setNodes(derivedNodes)
   }, [derivedNodes, setNodes])
@@ -179,8 +166,7 @@ function CanvasInner() {
     [flushPosition]
   )
 
-  // On unmount, flush anything still pending so a fast navigation doesn't
-  // silently drop the last drag.
+  // Flush pending position writes on unmount.
   useEffect(() => {
     const pending = pendingPositions.current
     return () => {
@@ -195,18 +181,11 @@ function CanvasInner() {
     }
   }, [updateAgent])
 
-  // ------------------------------------------------------------------------
-  // Change handlers
-  // ------------------------------------------------------------------------
-
+  // Change handlers: persist on drag-end only (debounced).
   const onNodesChange = useCallback(
     (changes: NodeChange<AgentNode>[]): void => {
       setNodes((curr) => applyNodeChanges(changes, curr))
       for (const change of changes) {
-        // react-flow emits `dragging: true` continuously during a drag and
-        // then a final event with `dragging: false` on mouse-up. We only
-        // persist on drag-end so we don't storm IPC with per-pixel writes,
-        // but we still debounce in case a second drag starts quickly.
         if (
           change.type === 'position' &&
           change.position &&
@@ -239,10 +218,7 @@ function CanvasInner() {
     async (params: Connection): Promise<void> => {
       if (!activeTeamId || !params.source || !params.target) return
 
-      // Auto-orient: the reporting line points parent -> child, so whichever
-      // agent is visually higher on the canvas becomes the parent no matter
-      // which direction the user dragged from. 8px tie-breaker keeps same-row
-      // drags honoring the user's intent.
+      // Auto-orient parent→child by y-position; 8px tie-breaker honors intent.
       const sourceNode = teamAgents.find((a) => a.id === params.source)
       const targetNode = teamAgents.find((a) => a.id === params.target)
       const shouldSwap =
@@ -261,12 +237,8 @@ function CanvasInner() {
         return
       }
 
-      // Force the edge's anchors to the parent's bottom-source and the child's
-      // top-target. This keeps the arrow visually descending (parent on top,
-      // arrow pointing down to child) regardless of which handle the user
-      // happened to grab — otherwise swapping source/target ids without
-      // swapping the handles leaves the edge drawn from the wrong side,
-      // which is exactly the "ele liga EM CIMA do CEO" bug the user reported.
+      // Pin handles so arrow descends parent-bottom → child-top regardless
+      // of which side the user dragged from.
       setEdges(
         (curr) =>
           addEdge(
@@ -320,10 +292,7 @@ function CanvasInner() {
     clearSelection()
   }, [clearSelection])
 
-  // ------------------------------------------------------------------------
-  // New-agent popover
-  // ------------------------------------------------------------------------
-
+  // New-agent popover.
   interface PopoverState {
     screen: { x: number; y: number }
     flow: { x: number; y: number }
@@ -346,9 +315,7 @@ function CanvasInner() {
     [activeTeamId, screenToFlowPosition]
   )
 
-  /** React-flow has no native `onPaneDoubleClick`. We listen on the wrapper
-   *  and accept only events whose target lives on the pane layer — nodes,
-   *  edges and controls are filtered out. */
+  /** Pane-only double-click (filter out nodes/edges/controls). */
   const onWrapperDoubleClick = useCallback(
     (e: ReactMouseEvent<HTMLDivElement>): void => {
       const target = e.target as HTMLElement | null
@@ -368,14 +335,80 @@ function CanvasInner() {
 
   const closePopover = useCallback(() => setPopover(null), [])
 
-  // ------------------------------------------------------------------------
-  // Keyboard shortcuts
-  // ------------------------------------------------------------------------
+  /** Right-click on empty pane opens the New Agent popover at the cursor. */
+  const onPaneContextMenu = useCallback(
+    (e: ReactMouseEvent | MouseEvent): void => {
+      e.preventDefault()
+      openPopoverAt(e.clientX, e.clientY)
+    },
+    [openPopoverAt]
+  )
 
-  // Bind at window level so the shortcuts work even when the canvas
-  // wrapper hasn't been clicked/focused yet. The target-tagname guard
-  // below keeps typing inside inputs / textareas / contenteditables
-  // (Inspector tabs, AgentCard rename, TaskBar) free of hijacks.
+  // Middle-click pan: react-flow's built-in only fires when mousedown lands
+  // on the pane layer; AgentCards swallow it. Capture-phase listener on
+  // the wrapper translates the viewport directly so the gesture works
+  // regardless of what's under the cursor.
+  useEffect(() => {
+    const wrapper = wrapperRef.current
+    if (!wrapper) return
+    let panning = false
+    let lastX = 0
+    let lastY = 0
+
+    const onDown = (e: MouseEvent): void => {
+      if (e.button !== 1) return
+      e.preventDefault(); e.stopPropagation()
+      panning = true; lastX = e.clientX; lastY = e.clientY
+      document.body.style.cursor = 'grabbing'
+    }
+    const onMove = (e: MouseEvent): void => {
+      if (!panning) return
+      const dx = e.clientX - lastX; const dy = e.clientY - lastY
+      lastX = e.clientX; lastY = e.clientY
+      const vp = getViewport()
+      setViewport({ x: vp.x + dx, y: vp.y + dy, zoom: vp.zoom })
+    }
+    const onUp = (e: MouseEvent): void => {
+      if (e.button !== 1 || !panning) return
+      panning = false
+      document.body.style.cursor = ''
+    }
+    // Suppress browser auto-scroll cursor on middle-click.
+    const onAux = (e: MouseEvent): void => { if (e.button === 1) e.preventDefault() }
+
+    wrapper.addEventListener('mousedown', onDown, true)
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    wrapper.addEventListener('auxclick', onAux, true)
+    return () => {
+      wrapper.removeEventListener('mousedown', onDown, true)
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      wrapper.removeEventListener('auxclick', onAux, true)
+      document.body.style.cursor = ''
+    }
+  }, [getViewport, setViewport])
+
+  // Shift+scroll = horizontal pan. Non-passive capture so we pre-empt RF.
+  useEffect(() => {
+    const wrapper = wrapperRef.current
+    if (!wrapper) return
+    const onWheel = (e: WheelEvent): void => {
+      if (!e.shiftKey) return
+      if (e.ctrlKey || e.metaKey) return
+      e.preventDefault()
+      e.stopPropagation()
+      const delta = e.deltaX !== 0 ? e.deltaX : e.deltaY
+      const vp = getViewport()
+      setViewport({ x: vp.x - delta, y: vp.y, zoom: vp.zoom })
+    }
+    wrapper.addEventListener('wheel', onWheel, { capture: true, passive: false })
+    return () => {
+      wrapper.removeEventListener('wheel', onWheel, { capture: true } as EventListenerOptions)
+    }
+  }, [getViewport, setViewport])
+
+  // Keyboard shortcuts (window-level; inInput guard frees form typing).
   useEffect(() => {
     const onKey = (e: globalThis.KeyboardEvent): void => {
       const target = e.target as HTMLElement | null
@@ -384,6 +417,15 @@ function CanvasInner() {
         (target.tagName === 'INPUT' ||
           target.tagName === 'TEXTAREA' ||
           target.isContentEditable)
+
+      if (e.key === 'Escape') {
+        if (inInput) return
+        let handled = false
+        if (popover) { closePopover(); handled = true }
+        if (selectedAgentIds.length > 0) { clearSelection(); handled = true }
+        if (handled) e.preventDefault()
+        return
+      }
 
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedAgentIds.length > 0) {
         if (inInput) return
@@ -396,6 +438,16 @@ function CanvasInner() {
         }
         for (const id of selectedAgentIds) void deleteAgent(id)
         clearSelection()
+        return
+      }
+
+      if ((e.key === 'a' || e.key === 'A') && (e.metaKey || e.ctrlKey)) {
+        if (inInput) return
+        if (e.altKey || e.shiftKey) return
+        e.preventDefault()
+        // Select every agent in the active team (append after a clear).
+        clearSelection()
+        for (const a of teamAgents) selectAgent(a.id, true)
         return
       }
 
@@ -423,11 +475,19 @@ function CanvasInner() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [selectedAgentIds, deleteAgent, clearSelection, openPopoverCenter, fitView])
+  }, [
+    selectedAgentIds,
+    deleteAgent,
+    clearSelection,
+    openPopoverCenter,
+    fitView,
+    popover,
+    closePopover,
+    teamAgents,
+    selectAgent
+  ])
 
-  // CanvasToolbar lives outside the ReactFlowProvider, so it can't call
-  // `useReactFlow().fitView` directly. It dispatches this custom event
-  // and we bridge the call here.
+  // Bridge orchestra:fit-view events from CanvasToolbar (outside provider).
   useEffect(() => {
     const onFitRequest = (): void => {
       fitView({ duration: 200 })
@@ -436,12 +496,7 @@ function CanvasInner() {
     return () => window.removeEventListener('orchestra:fit-view', onFitRequest)
   }, [fitView])
 
-  // ------------------------------------------------------------------------
-  // Type registration — memoised so react-flow does not remount nodes/edges
-  // on every parent render. This is called out in the react-flow docs and
-  // is the most common source of "why do my nodes flicker" bugs.
-  // ------------------------------------------------------------------------
-
+  // Memoised type maps — prevents react-flow node/edge remounts on rerender.
   const nodeTypes = useMemo<NodeTypes>(() => ({ agent: AgentCard }), [])
   const edgeTypes = useMemo<EdgeTypes>(() => ({ reporting: ReportingEdge }), [])
 
@@ -458,6 +513,10 @@ function CanvasInner() {
     []
   )
 
+  // TODO(hover-hint): 500ms hover on AgentCard bottom handle should show
+  // "drag down to manage a new agent". Needs data-hint="drop-target" on
+  // the Handle in AgentCard.tsx + a CSS rule — both outside this file.
+
   return (
     <div
       ref={wrapperRef}
@@ -466,9 +525,7 @@ function CanvasInner() {
       onDoubleClick={onWrapperDoubleClick}
       style={
         {
-          // react-flow reads these CSS vars via its own stylesheet; we map
-          // them onto Hydra's tokens so the canvas inherits dark theme
-          // without shipping a separate theme file.
+          // Map RF css vars onto Hydra tokens so the canvas inherits theme.
           ['--xy-background-color' as string]: 'var(--color-bg-0)',
           ['--xy-background-pattern-color' as string]:
             'var(--color-border-soft)',
@@ -493,6 +550,7 @@ function CanvasInner() {
         onConnect={onConnect}
         onNodeClick={onNodeClick}
         onPaneClick={onPaneClick}
+        onPaneContextMenu={onPaneContextMenu}
         zoomOnDoubleClick={false}
         snapToGrid
         snapGrid={[GRID, GRID]}
@@ -501,9 +559,6 @@ function CanvasInner() {
         fitView
         proOptions={{ hideAttribution: true }}
         deleteKeyCode={null}
-        // We own Delete/Backspace via onKeyDownCanvas — letting react-flow
-        // also bind them causes double-handling (agent deleted + edge
-        // deleted in the same press).
         panOnDrag={[1, 2]}
         selectionOnDrag
       >
@@ -529,9 +584,7 @@ function CanvasInner() {
   )
 }
 
-/** Public entry: wraps `CanvasInner` in a `ReactFlowProvider` so hooks like
- *  `useReactFlow` work. OrchestraView mounts one Canvas per team swap, so
- *  keeping the provider here (instead of at app root) is safe. */
+/** Wraps CanvasInner in ReactFlowProvider so useReactFlow hooks work. */
 export function Canvas() {
   return (
     <ReactFlowProvider>

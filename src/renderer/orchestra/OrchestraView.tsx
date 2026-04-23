@@ -10,12 +10,12 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import {
+  Activity,
   ArrowLeft,
-  Crown,
+  HelpCircle,
   Network,
   Plus,
-  Settings,
-  Activity
+  Settings
 } from 'lucide-react'
 import { useOrchestra } from './state/orchestra'
 import TeamRail from './TeamRail'
@@ -178,6 +178,8 @@ export default function OrchestraView({ onBackToClassic }: Props) {
     }
   }, [enabled, init])
 
+  const tasks = useOrchestra((s) => s.tasks)
+
   const activeTeam = useMemo(
     () => teams.find((t) => t.id === activeTeamId) ?? null,
     [teams, activeTeamId]
@@ -186,6 +188,28 @@ export default function OrchestraView({ onBackToClassic }: Props) {
     () => (activeTeam ? agents.filter((a) => a.teamId === activeTeam.id) : []),
     [agents, activeTeam]
   )
+  /** Count of tasks in the active team that failed in the last 24h —
+   *  surfaces as a red dot on the Health button. */
+  const recentFailureCount = useMemo(() => {
+    if (!activeTeam) return 0
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000
+    return tasks.reduce((acc, t) => {
+      if (t.teamId !== activeTeam.id) return acc
+      if (t.status !== 'failed') return acc
+      const ts = Date.parse(t.updatedAt)
+      return Number.isFinite(ts) && ts >= cutoff ? acc + 1 : acc
+    }, 0)
+  }, [tasks, activeTeam])
+  /** Any task currently executing across the active team. Drives the
+   *  thin accent border along the top edge of the canvas column. */
+  const hasInFlightTask = useMemo(() => {
+    if (!activeTeam) return false
+    return tasks.some(
+      (t) =>
+        t.teamId === activeTeam.id &&
+        (t.status === 'in_progress' || t.status === 'routing')
+    )
+  }, [tasks, activeTeam])
 
   if (!enabled) return null
 
@@ -216,58 +240,110 @@ export default function OrchestraView({ onBackToClassic }: Props) {
 
   return (
     <div className="relative flex h-full w-full min-w-0 flex-col overflow-hidden bg-bg-1 text-text-1">
-      {/* Top header strip */}
-      <header className="flex h-10 shrink-0 items-center justify-between border-b border-border-soft bg-bg-2 px-3">
-        <div className="flex min-w-0 items-center gap-2">
+      {/* Top header strip — 48px, two logical groups separated by a visible
+          divider on the right. See PRD.md §11. */}
+      <header className="flex h-12 shrink-0 items-center justify-between border-b border-border-soft bg-bg-2 px-4">
+        {/* Left group: navigation + brand + team picker */}
+        <div className="flex min-w-0 items-center gap-3">
           <button
             type="button"
             onClick={onBackToClassic}
-            className="flex items-center gap-1 rounded-sm px-1.5 py-1 text-[11px] text-text-3 hover:bg-bg-3 hover:text-text-1"
-            title="back to classic dashboard"
+            className="group relative flex h-7 w-7 items-center justify-center rounded-sm text-text-3 hover:bg-bg-3 hover:text-text-1"
+            aria-label="Back to classic dashboard"
           >
-            <ArrowLeft size={12} strokeWidth={1.75} />
-            Classic
+            <ArrowLeft size={14} strokeWidth={1.75} />
+            <HeaderTooltip label="Back to classic" />
           </button>
-          <span className="h-3 w-px bg-border-soft" aria-hidden />
-          <Network size={13} strokeWidth={1.75} className="text-accent-400" />
-          <span className="df-label text-sm font-semibold text-text-1">Orchestra</span>
-          <span className="font-mono text-[10px] text-text-4">·</span>
-          <TeamSwitcher />
-          {activeTeam?.mainAgentId ? (
-            <Crown
-              size={11}
-              strokeWidth={1.75}
-              className="text-accent-400"
-              aria-label="main agent set"
-            />
-          ) : null}
+          <div className="flex items-center gap-2">
+            <Network size={15} strokeWidth={1.75} className="text-accent-400" />
+            <span className="df-label text-sm font-semibold text-text-1">Orchestra</span>
+          </div>
+          {teams.length > 0 ? (
+            <>
+              <span
+                className="h-5 w-px bg-border-soft"
+                aria-hidden
+              />
+              <div className="flex items-center gap-1.5">
+                <TeamSwitcher />
+                {activeTeam?.mainAgentId ? (
+                  <span
+                    className="group relative flex h-5 w-5 items-center justify-center rounded-full bg-accent-500/10 text-[9px] font-semibold text-accent-400"
+                    aria-label="Main agent set"
+                  >
+                    M
+                    <HeaderTooltip label="Main agent set" />
+                  </span>
+                ) : null}
+                {activeAgents.length > 0 ? (
+                  <span className="font-mono text-[10px] text-text-4">
+                    {activeAgents.length} {activeAgents.length === 1 ? 'agent' : 'agents'}
+                  </span>
+                ) : null}
+              </div>
+            </>
+          ) : (
+            <>
+              <span className="h-5 w-px bg-border-soft" aria-hidden />
+              <button
+                type="button"
+                onClick={handleCreateBlank}
+                className="flex items-center gap-1 rounded-sm border border-accent-500/40 bg-accent-500/10 px-2 py-1 text-[11px] font-medium text-accent-400 hover:bg-accent-500/20"
+              >
+                <Plus size={12} strokeWidth={2} />
+                New team
+              </button>
+            </>
+          )}
         </div>
-        <div className="flex items-center gap-2 font-mono text-[10px] text-text-4">
-          {activeAgents.length > 0 ? (
-            <span>
-              {activeAgents.length} {activeAgents.length === 1 ? 'agent' : 'agents'}
+
+        {/* Right group: status actions (health, bell, settings) + separator + help */}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            {activeTeam ? (
+              <button
+                type="button"
+                onClick={() => setHealthOpen(true)}
+                className="group relative flex h-7 w-7 items-center justify-center rounded-sm text-text-3 hover:bg-bg-3 hover:text-text-1"
+                aria-label="Team health"
+              >
+                <Activity size={15} strokeWidth={1.75} />
+                {recentFailureCount > 0 ? (
+                  <span
+                    className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-red-500 px-1 font-mono text-[9px] font-semibold text-white"
+                    aria-label={`${recentFailureCount} failed tasks in the last 24h`}
+                  >
+                    {recentFailureCount > 9 ? '9+' : recentFailureCount}
+                  </span>
+                ) : null}
+                <HeaderTooltip label="Team health · Ctrl+B" />
+              </button>
+            ) : null}
+            {/* NotificationsBell carries its own button chrome + dropdown,
+                so we just wrap it in a `group` span to hang the tooltip. */}
+            <span className="group relative inline-flex">
+              <NotificationsBell />
+              <HeaderTooltip label="Notifications" />
             </span>
-          ) : null}
-          {activeTeam ? (
             <button
               type="button"
-              onClick={() => setHealthOpen(true)}
-              className="flex items-center gap-1 rounded-sm px-1.5 py-1 text-text-3 hover:bg-bg-3 hover:text-text-1"
-              title="Team health · Ctrl+B"
-              aria-label="Team health"
+              onClick={() => setSettingsOpen(true)}
+              className="group relative flex h-7 w-7 items-center justify-center rounded-sm text-text-3 hover:bg-bg-3 hover:text-text-1"
+              aria-label="Orchestra settings"
             >
-              <Activity size={14} strokeWidth={1.75} />
+              <Settings size={15} strokeWidth={1.75} />
+              <HeaderTooltip label="Settings · Ctrl+," />
             </button>
-          ) : null}
-          <NotificationsBell />
+          </div>
+          <span className="h-5 w-px bg-border-soft" aria-hidden />
           <button
             type="button"
-            onClick={() => setSettingsOpen(true)}
-            className="flex items-center gap-1 rounded-sm px-1.5 py-1 text-text-3 hover:bg-bg-3 hover:text-text-1"
-            title="Orchestra settings · Ctrl+,"
-            aria-label="Orchestra settings"
+            onClick={() => setHelpOpen(true)}
+            className="group relative flex h-7 w-7 items-center justify-center rounded-sm text-text-3 hover:bg-bg-3 hover:text-text-1"
+            aria-label="Help"
           >
-            <Settings size={14} strokeWidth={1.75} />
+            <HelpCircle size={15} strokeWidth={1.75} />
+            <HeaderTooltip label="Help · ?" />
           </button>
         </div>
       </header>
@@ -279,6 +355,15 @@ export default function OrchestraView({ onBackToClassic }: Props) {
         </aside>
 
         <main className="relative flex min-w-0 flex-1 flex-col bg-bg-1">
+          {/* Subtle accent stripe along the top edge when any task is
+              actively running. Non-interactive, pointer-events-none so it
+              never steals clicks from the canvas below. */}
+          {hasInFlightTask ? (
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-x-0 top-0 z-20 h-[2px] bg-gradient-to-r from-transparent via-accent-400 to-transparent"
+            />
+          ) : null}
           {teams.length === 0 ? (
             <EmptyTeamsState
               onBlank={handleCreateBlank}
@@ -455,6 +540,24 @@ function OrchestraTaskDrawerMount() {
   const close = useOrchestra((s) => s.setTaskDrawer)
   if (!taskId) return null
   return <TaskDrawer open={true} onClose={() => close(null)} />
+}
+
+/** Small below-the-button tooltip. Revealed via the parent `.group:hover`
+ *  rule so the parent only needs `className="group"`. We keep this
+ *  pointer-events-none so it never steals the click from the button. */
+interface HeaderTooltipProps {
+  label: string
+}
+
+function HeaderTooltip({ label }: HeaderTooltipProps) {
+  return (
+    <span
+      role="tooltip"
+      className="pointer-events-none absolute left-1/2 top-full z-50 mt-1 -translate-x-1/2 whitespace-nowrap rounded-sm border border-border-soft bg-bg-3 px-1.5 py-0.5 font-mono text-[10px] text-text-2 opacity-0 shadow-sm transition-opacity duration-100 group-hover:opacity-100"
+    >
+      {label}
+    </span>
+  )
 }
 
 function CanvasGhostState() {

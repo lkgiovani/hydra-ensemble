@@ -1,16 +1,23 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
-  ArrowUpDown,
-  Filter,
-  Info,
+  Clock,
+  FileText,
+  FolderOpen,
+  GitPullRequest,
   LayoutDashboard,
+  Network,
   Plus,
   X
 } from 'lucide-react'
 import { useSessions } from '../state/sessions'
 import { useSpawnDialog } from '../state/spawn'
-import type { SessionMeta } from '../../shared/types'
+import { useProjects } from '../state/projects'
+import { useEditor } from '../state/editor'
+import { useSlidePanel } from '../state/panels'
+import { useGh } from '../state/gh'
+import { useOrchestra } from '../orchestra/state/orchestra'
+import type { ChangedFile, SessionMeta, Worktree } from '../../shared/types'
 import { fmtShortcut } from '../lib/platform'
 import SessionCard from './SessionCard'
 
@@ -21,40 +28,13 @@ interface Props {
   mode?: 'inline' | 'overlay'
 }
 
-type FilterId = 'all' | 'running' | 'idle' | 'errors'
-type SortId = 'recent' | 'name' | 'cost'
+const RECENT_SESSIONS_LIMIT = 6
+const RECENT_CHANGES_LIMIT = 5
+const CHANGES_POLL_MS = 15_000
 
-const FILTERS: Array<{
-  id: FilterId
-  label: string
-  matches: (s: SessionMeta) => boolean
-}> = [
-  { id: 'all', label: 'all', matches: () => true },
-  {
-    id: 'running',
-    label: 'running',
-    matches: (s) => s.state === 'thinking' || s.state === 'generating'
-  },
-  {
-    id: 'idle',
-    label: 'idle',
-    matches: (s) => s.state === 'idle' || s.state === 'userInput' || !s.state
-  },
-  {
-    id: 'errors',
-    label: 'errors',
-    matches: (s) => s.state === 'needsAttention'
-  }
-]
-
-const SORTS: Array<{ id: SortId; label: string }> = [
-  { id: 'recent', label: 'recent' },
-  { id: 'name', label: 'name' },
-  { id: 'cost', label: 'cost' }
-]
-
-function isRunning(s: SessionMeta): boolean {
-  return s.state === 'thinking' || s.state === 'generating'
+interface ChangeEntry {
+  worktreePath: string
+  file: ChangedFile
 }
 
 function isSameDay(a: Date, b: Date): boolean {
@@ -65,31 +45,79 @@ function isSameDay(a: Date, b: Date): boolean {
   )
 }
 
-function costToday(sessions: SessionMeta[]): number {
-  const now = new Date()
-  return sessions.reduce((sum, s) => {
-    if (!s.cost || s.cost <= 0) return sum
-    const created = new Date(s.createdAt)
-    if (!isSameDay(created, now)) return sum
-    return sum + s.cost
-  }, 0)
+function startOfDay(d: Date): Date {
+  const copy = new Date(d)
+  copy.setHours(0, 0, 0, 0)
+  return copy
 }
 
-function sortSessions(list: SessionMeta[], sort: SortId): SessionMeta[] {
-  const copy = [...list]
-  if (sort === 'name') {
-    copy.sort((a, b) => a.name.localeCompare(b.name))
-  } else if (sort === 'cost') {
-    copy.sort((a, b) => (b.cost ?? 0) - (a.cost ?? 0))
-  } else {
-    // 'recent' — newest createdAt first
-    copy.sort((a, b) => {
-      const ta = new Date(a.createdAt).getTime()
-      const tb = new Date(b.createdAt).getTime()
-      return tb - ta
-    })
+function sessionsCreatedToday(sessions: SessionMeta[]): SessionMeta[] {
+  const now = new Date()
+  return sessions.filter((s) => isSameDay(new Date(s.createdAt), now))
+}
+
+function costToday(sessions: SessionMeta[]): number {
+  const today = sessionsCreatedToday(sessions)
+  return today.reduce((sum, s) => sum + (s.cost && s.cost > 0 ? s.cost : 0), 0)
+}
+
+/** "Time active today" — minutes between the earliest createdAt today and now.
+ *  A coarse but honest proxy: it's how long you've been at the keyboard today
+ *  in terms of spawned agents. */
+function minutesActiveToday(sessions: SessionMeta[]): number {
+  const today = sessionsCreatedToday(sessions)
+  if (today.length === 0) return 0
+  const earliest = today.reduce((min, s) => {
+    const t = new Date(s.createdAt).getTime()
+    return t < min ? t : min
+  }, Number.POSITIVE_INFINITY)
+  if (!Number.isFinite(earliest)) return 0
+  const floor = Math.max(earliest, startOfDay(new Date()).getTime())
+  return Math.max(0, Math.floor((Date.now() - floor) / 60_000))
+}
+
+function fmtMinutes(total: number): string {
+  if (total < 60) return `${total}m`
+  const h = Math.floor(total / 60)
+  const m = total % 60
+  return m === 0 ? `${h}h` : `${h}h ${m}m`
+}
+
+function basename(p: string): string {
+  const parts = p.split(/[\\/]/).filter(Boolean)
+  return parts[parts.length - 1] ?? p
+}
+
+function statusLabel(status: ChangedFile['status']): string {
+  switch (status) {
+    case 'added':
+      return 'A'
+    case 'deleted':
+      return 'D'
+    case 'renamed':
+      return 'R'
+    case 'untracked':
+      return '?'
+    case 'modified':
+    default:
+      return 'M'
   }
-  return copy
+}
+
+function statusTone(status: ChangedFile['status']): string {
+  switch (status) {
+    case 'added':
+      return 'text-status-generating'
+    case 'deleted':
+      return 'text-status-attention'
+    case 'renamed':
+      return 'text-status-input'
+    case 'untracked':
+      return 'text-text-4'
+    case 'modified':
+    default:
+      return 'text-accent-400'
+  }
 }
 
 export default function Dashboard({ open, onClose, mode = 'inline' }: Props) {
@@ -97,9 +125,25 @@ export default function Dashboard({ open, onClose, mode = 'inline' }: Props) {
   const setActive = useSessions((s) => s.setActive)
   const destroySession = useSessions((s) => s.destroySession)
   const cloneSession = useSessions((s) => s.cloneSession)
-  const [showExplainer, setShowExplainer] = useState(false)
-  const [filter, setFilter] = useState<FilterId>('all')
-  const [sort, setSort] = useState<SortId>('recent')
+
+  const currentProject = useProjects((s) =>
+    s.projects.find((p) => p.path === s.currentPath) ?? null
+  )
+  const worktrees = useProjects((s) => s.worktrees)
+
+  const openEditor = useEditor((s) => s.openEditor)
+  const setOverrideRoot = useEditor((s) => s.setOverrideRoot)
+  const openSlide = useSlidePanel((s) => s.open)
+
+  const orchestraEnabled = useOrchestra((s) => s.settings.enabled)
+  const setOrchestraSettings = useOrchestra((s) => s.setSettings)
+  const setOrchestraOpen = useOrchestra((s) => s.setOverlayOpen)
+
+  const ghPrs = useGh((s) => s.prs)
+
+  const [changes, setChanges] = useState<ChangeEntry[]>([])
+  // Re-tick so the stats bar refreshes "time active" without a prop change.
+  const [, setTickNow] = useState(0)
 
   useEffect(() => {
     if (!open) return
@@ -109,6 +153,99 @@ export default function Dashboard({ open, onClose, mode = 'inline' }: Props) {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [open, onClose])
+
+  // Keep the hero stats (time active today) refreshed while the dashboard is
+  // mounted. 30s is fine — the number is in minutes.
+  useEffect(() => {
+    if (!open) return
+    const id = window.setInterval(() => setTickNow((t) => t + 1), 30_000)
+    return () => window.clearInterval(id)
+  }, [open])
+
+  // Poll recent changes across all project worktrees, merge, sort.
+  useEffect(() => {
+    if (!open) return
+    const paths = worktrees.map((w) => w.path)
+    if (paths.length === 0) {
+      setChanges([])
+      return
+    }
+
+    let cancelled = false
+    const load = async (): Promise<void> => {
+      const results = await Promise.all(
+        paths.map(async (p) => {
+          const res = await window.api.git.listChangedFiles(p)
+          if (!res.ok) return [] as ChangeEntry[]
+          return res.value.map((f) => ({ worktreePath: p, file: f }))
+        })
+      )
+      if (cancelled) return
+      const flat = results.flat()
+      // Stable-ish ordering: unstaged first (user's live edits), then by path
+      // for determinism. We don't have mtime from porcelain, so this is the
+      // best "most relevant first" signal we have.
+      flat.sort((a, b) => {
+        const aStaged = a.file.staged ? 1 : 0
+        const bStaged = b.file.staged ? 1 : 0
+        if (aStaged !== bStaged) return aStaged - bStaged
+        return a.file.path.localeCompare(b.file.path)
+      })
+      setChanges(flat)
+    }
+
+    void load()
+    const id = window.setInterval(() => void load(), CHANGES_POLL_MS)
+    return () => {
+      cancelled = true
+      window.clearInterval(id)
+    }
+  }, [open, worktrees])
+
+  const todaySessions = useMemo(() => sessionsCreatedToday(sessions), [sessions])
+  const todayCost = useMemo(() => costToday(sessions), [sessions])
+  const activeMinutes = useMemo(() => minutesActiveToday(sessions), [sessions])
+
+  const recentSessions = useMemo(() => {
+    const copy = [...sessions]
+    copy.sort((a, b) => {
+      const ta = new Date(a.createdAt).getTime()
+      const tb = new Date(b.createdAt).getTime()
+      return tb - ta
+    })
+    return copy.slice(0, RECENT_SESSIONS_LIMIT)
+  }, [sessions])
+
+  const worktreeAgentCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const s of sessions) {
+      const key = s.worktreePath ?? s.cwd
+      if (!key) continue
+      counts[key] = (counts[key] ?? 0) + 1
+    }
+    return counts
+  }, [sessions])
+
+  const recentChanges = useMemo(
+    () => changes.slice(0, RECENT_CHANGES_LIMIT),
+    [changes]
+  )
+
+  const openPRs = useMemo(
+    () => ghPrs.filter((p) => p.state === 'OPEN').slice(0, 6),
+    [ghPrs]
+  )
+
+  const todayLabel = useMemo(() => {
+    const d = new Date()
+    return d.toLocaleDateString(undefined, {
+      weekday: 'long',
+      month: 'short',
+      day: 'numeric'
+    })
+  }, [])
+
+  if (!open) return null
 
   const handleFocus = (id: string): void => {
     setActive(id)
@@ -123,222 +260,288 @@ export default function Dashboard({ open, onClose, mode = 'inline' }: Props) {
   const handleClone = (id: string): void => {
     void cloneSession(id)
   }
+
   const handleSpawn = (): void => {
     useSpawnDialog.getState().show()
   }
 
-  const runningCount = useMemo(() => sessions.filter(isRunning).length, [sessions])
-  const todayCost = useMemo(() => costToday(sessions), [sessions])
+  const handleOpenWorktree = (path?: string): void => {
+    const target = path ?? currentProject?.path ?? null
+    if (target) setOverrideRoot(target)
+    openEditor()
+    openSlide('editor')
+    onClose()
+  }
 
-  const counts = useMemo(() => {
-    const acc = {} as Record<FilterId, number>
-    for (const f of FILTERS) {
-      acc[f.id] = sessions.filter(f.matches).length
+  const handleOpenOrchestra = (): void => {
+    if (!orchestraEnabled) {
+      void setOrchestraSettings({ enabled: true })
     }
-    return acc
-  }, [sessions])
+    setOrchestraOpen(true)
+    onClose()
+  }
 
-  const visible = useMemo(() => {
-    const fn = FILTERS.find((f) => f.id === filter)?.matches ?? (() => true)
-    return sortSessions(sessions.filter(fn), sort)
-  }, [sessions, filter, sort])
-
-  if (!open) return null
-
-  const headerCounts = (
-    <div className="flex items-baseline gap-1.5 font-mono text-[11px] text-text-3">
-      <span className="tabular-nums text-text-2">
-        {sessions.length} {sessions.length === 1 ? 'session' : 'sessions'}
-      </span>
-      <span className="text-text-4">·</span>
-      <span className="tabular-nums">
-        <span className={runningCount > 0 ? 'text-accent-400' : 'text-text-3'}>
-          {runningCount}
-        </span>{' '}
-        running
-      </span>
-      <span className="text-text-4">·</span>
-      <span className="tabular-nums text-text-3">
-        ${todayCost.toFixed(2)} today
-      </span>
-    </div>
-  )
-
-  const chips = (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <Filter size={11} strokeWidth={1.75} className="text-text-4" />
-      {FILTERS.map((f) => {
-        const active = filter === f.id
-        return (
-          <button
-            key={f.id}
-            type="button"
-            onClick={() => setFilter(f.id)}
-            className={`rounded-sm px-2 py-1 text-[11px] transition-colors ${
-              active
-                ? 'bg-accent-500/15 text-accent-400'
-                : 'bg-bg-3 text-text-2 hover:text-text-1'
-            }`}
-          >
-            {f.label}
-            <span
-              className={`ml-1 font-mono tabular-nums ${
-                active ? 'text-accent-400/80' : 'text-text-4'
-              }`}
-            >
-              {counts[f.id] ?? 0}
+  const hero = (
+    <section className="flex shrink-0 flex-col gap-2 border-b border-border-soft bg-bg-2 px-6 py-5">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <LayoutDashboard
+              size={16}
+              strokeWidth={1.75}
+              className="text-accent-400"
+            />
+            <span className="text-[11px] uppercase tracking-wider text-text-4">
+              Dashboard
             </span>
-          </button>
-        )
-      })}
-    </div>
-  )
-
-  const sortSelect = (
-    <label className="flex items-center gap-1.5 text-[11px] text-text-3">
-      <ArrowUpDown size={11} strokeWidth={1.75} className="text-text-4" />
-      <select
-        value={sort}
-        onChange={(e) => setSort(e.target.value as SortId)}
-        className="cursor-pointer rounded-sm bg-bg-3 px-2 py-1 text-[11px] text-text-2 outline-none hover:text-text-1 focus:ring-1 focus:ring-accent-500/40"
-        aria-label="sort sessions"
-      >
-        {SORTS.map((s) => (
-          <option key={s.id} value={s.id} className="bg-bg-2 text-text-1">
-            {s.label}
-          </option>
-        ))}
-      </select>
-    </label>
-  )
-
-  const emptyState = (
-    <div className="flex flex-1 flex-col items-center justify-center gap-4 py-16">
-      <LayoutDashboard size={44} strokeWidth={1.25} className="text-text-4" />
-      <div className="flex flex-col items-center gap-1">
-        <div className="text-base font-semibold text-text-1">no sessions yet</div>
-        <div className="text-xs text-text-4">
-          spawn an agent to start monitoring it here.
+          </div>
+          <h1 className="truncate text-2xl font-semibold text-text-1">
+            {currentProject?.name ?? 'Workspace'}
+          </h1>
+          <div className="text-[11px] text-text-4">{todayLabel}</div>
         </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-sm p-1.5 text-text-3 hover:bg-bg-3 hover:text-text-1"
+          aria-label="close"
+          title="Esc"
+        >
+          <X size={14} strokeWidth={1.75} />
+        </button>
       </div>
-      <button
-        type="button"
+      <div className="mt-2 grid grid-cols-3 gap-3">
+        <Stat
+          label="sessions today"
+          value={todaySessions.length.toString()}
+          accent
+        />
+        <Stat label="time active" value={fmtMinutes(activeMinutes)} />
+        <Stat label="cost today" value={`$${todayCost.toFixed(2)}`} />
+      </div>
+    </section>
+  )
+
+  const primaryActions = (
+    <section className="grid shrink-0 grid-cols-1 gap-3 px-6 py-5 md:grid-cols-3">
+      <ActionButton
+        primary
+        icon={<Plus size={18} strokeWidth={2} />}
+        title="New session"
+        subtitle="spawn an agent"
         onClick={handleSpawn}
-        className="flex items-center gap-1.5 rounded-sm bg-accent-500/15 px-3 py-1.5 text-[12px] font-medium text-accent-400 transition-colors hover:bg-accent-500/25"
-      >
-        <Plus size={13} strokeWidth={2} />
-        new session
-      </button>
-    </div>
+      />
+      <ActionButton
+        icon={<FolderOpen size={18} strokeWidth={1.75} />}
+        title="Open Worktree"
+        subtitle={
+          currentProject
+            ? `${currentProject.name} in editor`
+            : 'open editor on project'
+        }
+        onClick={() => handleOpenWorktree()}
+        disabled={!currentProject}
+      />
+      <ActionButton
+        icon={<Network size={18} strokeWidth={1.75} />}
+        title={orchestraEnabled ? 'Open Orchestra' : 'Enable Orchestra'}
+        subtitle={
+          orchestraEnabled
+            ? 'headless agent teams'
+            : 'experimental — click to turn on'
+        }
+        onClick={handleOpenOrchestra}
+      />
+    </section>
   )
 
-  const filteredEmpty = (
-    <div className="flex flex-1 flex-col items-center justify-center gap-2 py-16">
-      <LayoutDashboard size={32} strokeWidth={1.25} className="text-text-4" />
-      <div className="text-sm text-text-2">no sessions match this filter</div>
-      <button
-        type="button"
-        onClick={() => setFilter('all')}
-        className="font-mono text-[11px] text-text-4 hover:text-text-1"
-      >
-        show all →
-      </button>
-    </div>
+  const recentSessionsSection = (
+    <Section
+      title="Recent sessions"
+      hint={
+        sessions.length > RECENT_SESSIONS_LIMIT
+          ? `showing ${RECENT_SESSIONS_LIMIT} of ${sessions.length}`
+          : undefined
+      }
+    >
+      {recentSessions.length === 0 ? (
+        <EmptyRow
+          icon={<LayoutDashboard size={18} strokeWidth={1.5} />}
+          label="no sessions yet"
+          action={
+            <button
+              type="button"
+              onClick={handleSpawn}
+              className="flex items-center gap-1 rounded-sm bg-accent-500/15 px-2 py-1 text-[11px] font-medium text-accent-400 hover:bg-accent-500/25"
+            >
+              <Plus size={12} strokeWidth={2} />
+              new session
+            </button>
+          }
+        />
+      ) : (
+        <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))] [grid-auto-rows:min-content]">
+          {recentSessions.map((s) => {
+            const realIndex = sessions.findIndex((x) => x.id === s.id)
+            return (
+              <SessionCard
+                key={s.id}
+                session={s}
+                index={realIndex + 1}
+                active={false}
+                onClick={() => handleFocus(s.id)}
+                onDestroy={() => handleDestroy(s.id)}
+                onRestart={() => handleRestart(s.id)}
+                onClone={() => handleClone(s.id)}
+              />
+            )
+          })}
+        </div>
+      )}
+    </Section>
   )
 
-  const grid = (
-    <div className="df-scroll grid flex-1 gap-3 overflow-y-auto pr-1 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))] [grid-auto-rows:min-content]">
-      {visible.map((s) => {
-        const realIndex = sessions.findIndex((x) => x.id === s.id)
-        return (
-          <SessionCard
-            key={s.id}
-            session={s}
-            index={realIndex + 1}
-            active={false}
-            onClick={() => handleFocus(s.id)}
-            onDestroy={() => handleDestroy(s.id)}
-            onRestart={() => handleRestart(s.id)}
-            onClone={() => handleClone(s.id)}
-          />
-        )
-      })}
-    </div>
+  const worktreesSection = (
+    <Section title="Worktrees" hint={`${worktrees.length} on this project`}>
+      {worktrees.length === 0 ? (
+        <EmptyRow
+          icon={<FolderOpen size={18} strokeWidth={1.5} />}
+          label="no worktrees yet"
+        />
+      ) : (
+        <div className="df-scroll -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+          {worktrees.map((w) => (
+            <WorktreeCard
+              key={w.path}
+              worktree={w}
+              agentCount={worktreeAgentCounts[w.path] ?? 0}
+              onOpen={() => handleOpenWorktree(w.path)}
+            />
+          ))}
+        </div>
+      )}
+    </Section>
+  )
+
+  const recentChangesSection = (
+    <Section
+      title="Recent changes"
+      icon={<FileText size={13} strokeWidth={1.75} className="text-text-4" />}
+      hint={
+        changes.length > RECENT_CHANGES_LIMIT
+          ? `${changes.length} total`
+          : undefined
+      }
+    >
+      {recentChanges.length === 0 ? (
+        <EmptyRow
+          icon={<FileText size={18} strokeWidth={1.5} />}
+          label="working tree is clean"
+        />
+      ) : (
+        <ul className="flex flex-col divide-y divide-border-soft rounded-sm border border-border-soft bg-bg-2">
+          {recentChanges.map((c, i) => (
+            <li
+              key={`${c.worktreePath}:${c.file.path}:${i}`}
+              className="flex items-center gap-3 px-3 py-2 text-[12px]"
+            >
+              <span
+                className={`w-3 shrink-0 font-mono text-[11px] ${statusTone(c.file.status)}`}
+              >
+                {statusLabel(c.file.status)}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-text-1">
+                {c.file.path}
+              </span>
+              <span className="truncate font-mono text-[10px] text-text-4">
+                {basename(c.worktreePath)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Section>
+  )
+
+  const openPRsSection = (
+    <Section
+      title="Open PRs"
+      icon={
+        <GitPullRequest size={13} strokeWidth={1.75} className="text-text-4" />
+      }
+      hint={openPRs.length > 0 ? `${openPRs.length}` : undefined}
+    >
+      {openPRs.length === 0 ? (
+        <EmptyRow
+          icon={<GitPullRequest size={18} strokeWidth={1.5} />}
+          label="no cached PRs — open the PR panel to refresh"
+        />
+      ) : (
+        <ul className="flex flex-col divide-y divide-border-soft rounded-sm border border-border-soft bg-bg-2">
+          {openPRs.map((pr) => (
+            <li
+              key={pr.number}
+              className="flex items-center gap-3 px-3 py-2 text-[12px]"
+            >
+              <span className="w-10 shrink-0 font-mono text-[11px] text-text-4">
+                #{pr.number}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-text-1">
+                {pr.title}
+              </span>
+              {pr.isDraft ? (
+                <span className="shrink-0 rounded-sm bg-bg-3 px-1.5 py-0.5 font-mono text-[10px] text-text-3">
+                  draft
+                </span>
+              ) : null}
+              <span className="hidden shrink-0 truncate font-mono text-[10px] text-text-4 md:inline">
+                {pr.headRefName}
+              </span>
+              <span className="shrink-0 font-mono text-[10px] text-text-4">
+                @{pr.author}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Section>
+  )
+
+  const footer = (
+    <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-border-soft bg-bg-2 px-6 py-3 text-[11px] text-text-4">
+      <div className="flex items-center gap-2">
+        <Clock size={11} strokeWidth={1.75} />
+        <span>
+          press{' '}
+          <kbd className="rounded-sm bg-bg-3 px-1.5 py-0.5 font-mono text-[10px] text-text-2">
+            {fmtShortcut('K')}
+          </kbd>{' '}
+          for the command palette
+        </span>
+      </div>
+      <div>
+        new here? try the{' '}
+        <kbd className="rounded-sm bg-bg-3 px-1.5 py-0.5 font-mono text-[10px] text-text-2">
+          tour
+        </kbd>{' '}
+        button in the top-right.
+      </div>
+    </footer>
   )
 
   const body = (
     <div className="flex h-full w-full min-w-0 flex-col overflow-hidden bg-bg-1">
-      {/* sticky title strip */}
-      <header className="sticky top-0 z-10 flex shrink-0 flex-col gap-2 border-b border-border-soft bg-bg-2 px-4 py-3">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex min-w-0 flex-col gap-0.5">
-            <div className="flex items-center gap-2 text-sm">
-              <LayoutDashboard size={14} strokeWidth={1.75} className="text-accent-400" />
-              <span className="font-semibold text-text-1">Dashboard</span>
-            </div>
-            {headerCounts}
-          </div>
-          <div className="flex items-center gap-1">
-            {sessions.length > 0 ? (
-              <button
-                type="button"
-                onClick={handleSpawn}
-                className="flex items-center gap-1 rounded-sm bg-accent-500/15 px-2 py-1 text-[11px] font-medium text-accent-400 hover:bg-accent-500/25"
-                title="new session"
-              >
-                <Plus size={12} strokeWidth={2} />
-                new
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => setShowExplainer((v) => !v)}
-              className="flex items-center gap-1 rounded-sm px-1.5 py-1 text-[10px] text-text-4 hover:bg-bg-3 hover:text-text-1"
-              title="what is the dashboard?"
-            >
-              <Info size={11} strokeWidth={1.75} />
-              what?
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-sm p-1.5 text-text-3 hover:bg-bg-3 hover:text-text-1"
-              aria-label="close"
-              title="Esc"
-            >
-              <X size={14} strokeWidth={1.75} />
-            </button>
-          </div>
+      <div className="df-scroll flex flex-1 flex-col overflow-y-auto">
+        {hero}
+        {primaryActions}
+        <div className="flex flex-col gap-6 px-6 pb-6">
+          {recentSessionsSection}
+          {worktreesSection}
+          {recentChangesSection}
+          {openPRsSection}
         </div>
-
-        {/* filters + sort row — only meaningful when there are sessions */}
-        {sessions.length > 0 ? (
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            {chips}
-            {sortSelect}
-          </div>
-        ) : null}
-      </header>
-
-      {showExplainer ? (
-        <div className="border-b border-border-soft bg-bg-1 px-4 py-3 text-[11px] leading-relaxed text-text-3">
-          <p className="mb-1.5">
-            <strong className="text-text-2">Dashboard</strong> — overview of every running agent
-            at once. Each card shows live state (thinking, generating, awaiting input), model and
-            the latest assistant response.
-          </p>
-          <p>
-            Useful when you have several agents running in parallel and want to monitor them at a
-            glance without cycling through {fmtShortcut('1')} / {fmtShortcut('2')} /{' '}
-            {fmtShortcut('3')}. Click a card to focus that session — the dashboard closes and the
-            main terminal switches to it.
-          </p>
-        </div>
-      ) : null}
-
-      <div className="flex flex-1 flex-col overflow-hidden p-3">
-        {sessions.length === 0 ? emptyState : visible.length === 0 ? filteredEmpty : grid}
       </div>
+      {footer}
     </div>
   )
 
@@ -356,5 +559,163 @@ export default function Dashboard({ open, onClose, mode = 'inline' }: Props) {
       </div>
     </div>,
     document.body
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Local presentational helpers
+// ---------------------------------------------------------------------------
+
+interface StatProps {
+  label: string
+  value: string
+  accent?: boolean
+}
+
+function Stat({ label, value, accent }: StatProps) {
+  return (
+    <div className="flex flex-col gap-0.5 rounded-sm border border-border-soft bg-bg-1/50 px-3 py-2">
+      <span
+        className={`font-mono text-lg tabular-nums ${
+          accent ? 'text-accent-400' : 'text-text-1'
+        }`}
+      >
+        {value}
+      </span>
+      <span className="text-[10px] uppercase tracking-wider text-text-4">
+        {label}
+      </span>
+    </div>
+  )
+}
+
+interface ActionButtonProps {
+  icon: React.ReactNode
+  title: string
+  subtitle: string
+  onClick: () => void
+  primary?: boolean
+  disabled?: boolean
+}
+
+function ActionButton({
+  icon,
+  title,
+  subtitle,
+  onClick,
+  primary,
+  disabled
+}: ActionButtonProps) {
+  const base =
+    'flex items-center gap-3 rounded-md border px-4 py-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50'
+  const style = primary
+    ? 'border-accent-500/40 bg-accent-500/10 text-accent-400 hover:bg-accent-500/20'
+    : 'border-border-soft bg-bg-2 text-text-1 hover:border-border-mid hover:bg-bg-3'
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`${base} ${style}`}
+    >
+      <span
+        className={`flex h-9 w-9 items-center justify-center rounded-sm ${
+          primary ? 'bg-accent-500/20 text-accent-400' : 'bg-bg-3 text-text-2'
+        }`}
+      >
+        {icon}
+      </span>
+      <span className="flex min-w-0 flex-col">
+        <span className="text-sm font-semibold">{title}</span>
+        <span
+          className={`truncate text-[11px] ${
+            primary ? 'text-accent-400/70' : 'text-text-4'
+          }`}
+        >
+          {subtitle}
+        </span>
+      </span>
+    </button>
+  )
+}
+
+interface SectionProps {
+  title: string
+  icon?: React.ReactNode
+  hint?: string
+  children: React.ReactNode
+}
+
+function Section({ title, icon, hint, children }: SectionProps) {
+  return (
+    <section className="flex flex-col gap-2">
+      <header className="flex items-baseline justify-between gap-2">
+        <div className="flex items-center gap-1.5">
+          {icon}
+          <h2 className="text-[12px] font-semibold uppercase tracking-wider text-text-2">
+            {title}
+          </h2>
+        </div>
+        {hint ? (
+          <span className="font-mono text-[10px] text-text-4">{hint}</span>
+        ) : null}
+      </header>
+      {children}
+    </section>
+  )
+}
+
+interface EmptyRowProps {
+  icon: React.ReactNode
+  label: string
+  action?: React.ReactNode
+}
+
+function EmptyRow({ icon, label, action }: EmptyRowProps) {
+  return (
+    <div className="flex items-center gap-3 rounded-sm border border-dashed border-border-soft bg-bg-2/40 px-3 py-4 text-[12px] text-text-4">
+      <span className="text-text-4">{icon}</span>
+      <span className="flex-1">{label}</span>
+      {action}
+    </div>
+  )
+}
+
+interface WorktreeCardProps {
+  worktree: Worktree
+  agentCount: number
+  onOpen: () => void
+}
+
+function WorktreeCard({ worktree, agentCount, onOpen }: WorktreeCardProps) {
+  const name = basename(worktree.path)
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex w-56 shrink-0 flex-col gap-1 rounded-sm border border-border-soft bg-bg-2 px-3 py-2 text-left transition-colors hover:border-border-mid hover:bg-bg-3"
+      title={worktree.path}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate text-[12px] font-semibold text-text-1">
+          {name}
+        </span>
+        {worktree.isMain ? (
+          <span className="shrink-0 rounded-sm bg-accent-500/15 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-accent-400">
+            main
+          </span>
+        ) : null}
+      </div>
+      <div className="truncate font-mono text-[10px] text-text-4">
+        {worktree.branch || worktree.head.slice(0, 7)}
+      </div>
+      <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-text-4">
+        <span>
+          <span className="tabular-nums text-text-2">{agentCount}</span>{' '}
+          {agentCount === 1 ? 'agent' : 'agents'}
+        </span>
+        <span className="text-text-4">open →</span>
+      </div>
+    </button>
   )
 }

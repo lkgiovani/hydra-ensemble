@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Keyboard, Search, X } from 'lucide-react'
+import { Keyboard, PlayCircle, Search, X } from 'lucide-react'
 import { ACTIONS, allBindings, useKeybinds } from '../state/keybinds'
 import { formatCombo } from '../lib/keybind'
 
@@ -11,6 +11,11 @@ interface Props {
 interface Row {
   label: string
   combo: string
+  /**
+   * Optional action id. When set, the row represents a dynamic keybind from
+   * ACTIONS and will reflect user overrides. Static rows leave this empty.
+   */
+  actionId?: string
 }
 
 interface Section {
@@ -19,36 +24,130 @@ interface Section {
 }
 
 /**
- * Group buckets we care about in the cheatsheet. Everything else from the
- * dynamic ACTIONS registry lands under "Panels" by default since that's
- * the umbrella we use for overlays/drawers. The static block at the bottom
- * covers Orchestra-level shortcuts that are handled outside ACTIONS.
+ * Section order shown in the overlay. We keep a fixed taxonomy so the user
+ * always finds the same bucket in the same spot regardless of which rows
+ * matched the current search query.
  */
-const GROUP_ORDER = ['Navigation', 'Panels', 'Sessions', 'Editor', 'Orchestra'] as const
+const GROUP_ORDER = [
+  'Navigation',
+  'Sessions',
+  'Orchestra',
+  'Editor',
+  'Chat / Session Pane'
+] as const
+
+type Group = (typeof GROUP_ORDER)[number]
 
 /**
- * Actions from ACTIONS are grouped by `action.group`. These overrides let
- * us reassign a few entries into the five buckets we show in the overlay
- * without mutating the source of truth in keybinds.ts.
+ * Which static section should host each dynamic action id. When an action
+ * lives in ACTIONS (so the user may rebind it) we want to render it under
+ * the discoverable section header rather than in a generic "Panels" bucket.
+ * Every action listed in the task's "Required additions" maps into one of
+ * the five sections below.
  */
-const GROUP_REMAP: Record<string, (typeof GROUP_ORDER)[number]> = {
-  'session.next': 'Navigation',
-  'session.prev': 'Navigation',
-  'panel.editor': 'Editor'
+const ACTION_TO_GROUP: Record<string, Group> = {
+  'palette.open': 'Navigation',
+  'panel.dashboard': 'Navigation',
+  'panel.editor': 'Navigation',
+  'panel.watchdogs': 'Navigation',
+  'panel.pr': 'Navigation',
+  'panel.terminals': 'Navigation',
+  'drawer.projects': 'Navigation',
+  'orchestra.open': 'Navigation',
+
+  'session.new': 'Sessions',
+  'session.quickSpawn': 'Sessions',
+  'session.close': 'Sessions',
+  'session.prev': 'Sessions',
+  'session.next': 'Sessions'
 }
 
 /**
- * Static Orchestra-level shortcuts that don't live in ACTIONS. These are
- * handled either as global app shortcuts or inside the Orchestra module.
+ * Static rows per section. These fill in shortcuts that aren't registered
+ * in the ACTIONS registry (either handled deep inside a module like the
+ * editor / chat composer, or hardcoded globals such as `?` and `Esc`).
+ *
+ * The `ensureCovered` helper below merges these with the dynamic ACTIONS
+ * set so user-overridden combos always show the current bound value while
+ * the hardcoded ones remain visible and discoverable.
  */
-const ORCHESTRA_EXTRAS: Row[] = [
-  { label: 'Show this cheatsheet', combo: '?' },
-  { label: 'Command palette', combo: 'mod+p' },
-  { label: 'Open settings', combo: 'mod+,' },
-  { label: 'New Orchestra session', combo: 'mod+shift+n' },
-  { label: 'Kill focused agent', combo: 'mod+shift+k' },
-  { label: 'Toggle sidebar', combo: 'mod+b' }
-]
+const STATIC_SECTIONS: Record<Group, Row[]> = {
+  // Labels here intentionally mirror the `label` strings in ACTIONS
+  // (state/keybinds.ts) for rows that have a matching action id — the
+  // merge step keys off label equality (case-insensitive) so keeping
+  // them aligned prevents the dynamic override row from appearing as a
+  // near-duplicate of the static row.
+  Navigation: [
+    { label: 'Command palette', combo: 'mod+k' },
+    { label: 'Spotlight search', combo: 'mod+shift+p' },
+    { label: 'Dashboard', combo: 'mod+d' },
+    { label: 'Code editor', combo: 'mod+e' },
+    { label: 'Watchdogs', combo: 'mod+shift+w' },
+    { label: 'PR inspector', combo: 'mod+shift+p' },
+    { label: 'Terminals panel', combo: 'mod+backquote' },
+    { label: 'Projects drawer', combo: 'mod+t' },
+    { label: 'Open Orchestra', combo: 'mod+shift+a' }
+  ],
+  Sessions: [
+    { label: 'New session (picker)', combo: 'mod+n' },
+    { label: 'Quick-spawn (active cwd)', combo: 'mod+shift+n' },
+    { label: 'Close active session', combo: 'mod+w' },
+    { label: 'Previous session', combo: 'mod+[' },
+    { label: 'Next session', combo: 'mod+]' },
+    { label: 'Jump to session 1', combo: 'mod+1' },
+    { label: 'Jump to session 2', combo: 'mod+2' },
+    { label: 'Jump to session 3', combo: 'mod+3' },
+    { label: 'Jump to session 4', combo: 'mod+4' },
+    { label: 'Jump to session 5', combo: 'mod+5' },
+    { label: 'Jump to session 6', combo: 'mod+6' },
+    { label: 'Jump to session 7', combo: 'mod+7' },
+    { label: 'Jump to session 8', combo: 'mod+8' },
+    { label: 'Jump to session 9', combo: 'mod+9' }
+  ],
+  Orchestra: [
+    { label: 'New agent at canvas', combo: 'a' },
+    { label: 'Remove selected agent', combo: 'delete' },
+    { label: 'Fit to screen', combo: 'mod+0' },
+    { label: 'Focus task creation', combo: '/' },
+    { label: 'Agent wizard', combo: 'mod+shift+k' },
+    { label: 'New task', combo: 'mod+shift+n' },
+    { label: 'Orchestra settings', combo: 'mod+,' },
+    { label: 'Team health', combo: 'mod+b' },
+    { label: 'Orchestra help', combo: '?' }
+  ],
+  Editor: [
+    { label: 'Find in file', combo: 'mod+f' },
+    { label: 'Find in project', combo: 'mod+shift+f' },
+    { label: 'Replace', combo: 'mod+h' },
+    { label: 'Save', combo: 'mod+s' },
+    { label: 'Open file', combo: 'mod+p' }
+  ],
+  'Chat / Session Pane': [
+    { label: 'Send', combo: 'enter' },
+    { label: 'Newline', combo: 'shift+enter' },
+    { label: 'Toggle thinking', combo: 'alt+t' },
+    { label: 'Focus composer', combo: 'mod+/' },
+    { label: 'Stop streaming', combo: 'escape' }
+  ]
+}
+
+/**
+ * Merge a dynamic binding into the section rows. If an entry with the
+ * same (case-insensitive) label already exists we overwrite its combo so
+ * the table always shows the user's current bound key. Otherwise we
+ * append the dynamic row to the section so newly registered actions still
+ * surface in the cheatsheet even if we forgot to list them in the static
+ * block above.
+ */
+function mergeDynamic(rows: Row[], label: string, combo: string, actionId: string): Row[] {
+  const idx = rows.findIndex((r) => r.label.toLowerCase() === label.toLowerCase())
+  if (idx >= 0) {
+    const next = rows.slice()
+    next[idx] = { ...next[idx], combo, actionId }
+    return next
+  }
+  return [...rows, { label, combo, actionId }]
+}
 
 export default function KeyboardCheatsheet({ open, onClose }: Props) {
   const overrides = useKeybinds((s) => s.overrides)
@@ -58,7 +157,10 @@ export default function KeyboardCheatsheet({ open, onClose }: Props) {
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape' || e.key === '?') {
+        e.preventDefault()
+        onClose()
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -72,16 +174,31 @@ export default function KeyboardCheatsheet({ open, onClose }: Props) {
   }, [open])
 
   const sections: Section[] = useMemo(() => {
-    const bucket = new Map<string, Row[]>()
-    for (const title of GROUP_ORDER) bucket.set(title, [])
-
-    for (const { action, combo } of allBindings(overrides)) {
-      const group: string = GROUP_REMAP[action.id] ?? action.group
-      const target = bucket.get(group) ?? bucket.get('Panels')!
-      target.push({ label: action.label, combo })
+    // Start from a deep copy of the static catalogue so we can safely mutate.
+    const bucket = new Map<Group, Row[]>()
+    for (const title of GROUP_ORDER) {
+      bucket.set(title, STATIC_SECTIONS[title].map((r) => ({ ...r })))
     }
 
-    bucket.get('Orchestra')!.push(...ORCHESTRA_EXTRAS)
+    // Overlay dynamic ACTIONS onto the appropriate section. This is how
+    // user-overridden combos show the current value — the static row for
+    // the same label gets its combo replaced with the live binding.
+    for (const { action, combo } of allBindings(overrides)) {
+      const group = ACTION_TO_GROUP[action.id]
+      if (!group) continue
+      const existing = bucket.get(group) ?? []
+      bucket.set(group, mergeDynamic(existing, action.label, combo, action.id))
+    }
+
+    // Also surface any ACTIONS that slipped past the mapping (future-proofing:
+    // if someone adds a new action without touching this file it still shows
+    // up rather than disappearing silently).
+    const mappedIds = new Set(Object.keys(ACTION_TO_GROUP))
+    const overflow: Row[] = []
+    for (const { action, combo } of allBindings(overrides)) {
+      if (mappedIds.has(action.id)) continue
+      overflow.push({ label: action.label, combo, actionId: action.id })
+    }
 
     const needle = query.trim().toLowerCase()
     const filter = (rows: Row[]): Row[] => {
@@ -96,14 +213,27 @@ export default function KeyboardCheatsheet({ open, onClose }: Props) {
       })
     }
 
-    return GROUP_ORDER.map((title) => ({ title, rows: filter(bucket.get(title) ?? []) })).filter(
-      (s) => s.rows.length > 0
-    )
+    const ordered: Section[] = GROUP_ORDER.map((title) => ({
+      title,
+      rows: filter(bucket.get(title) ?? [])
+    }))
+
+    if (overflow.length > 0) {
+      const filtered = filter(overflow)
+      if (filtered.length > 0) ordered.push({ title: 'Other', rows: filtered })
+    }
+
+    return ordered.filter((s) => s.rows.length > 0)
   }, [overrides, query])
 
-  if (!open) return null
-
   const totalVisible = sections.reduce((n, s) => n + s.rows.length, 0)
+
+  const handleTour = (): void => {
+    window.dispatchEvent(new CustomEvent('app:open-tour', { detail: { id: 'classic-overview' } }))
+    onClose()
+  }
+
+  if (!open) return null
 
   return (
     <div
@@ -113,7 +243,7 @@ export default function KeyboardCheatsheet({ open, onClose }: Props) {
       }}
     >
       <div
-        className="flex w-full max-w-4xl flex-col overflow-hidden border border-border-mid bg-bg-2 shadow-pop"
+        className="flex w-full max-w-5xl flex-col overflow-hidden border border-border-mid bg-bg-2 shadow-pop"
         style={{ borderRadius: 'var(--radius-lg)' }}
       >
         <header className="flex items-center justify-between border-b border-border-soft bg-bg-1 px-4 py-2.5">
@@ -193,10 +323,17 @@ export default function KeyboardCheatsheet({ open, onClose }: Props) {
           )}
         </div>
 
-        <footer className="flex items-center justify-between border-t border-border-soft bg-bg-1 px-4 py-2 font-mono text-[10px] text-text-4">
-          <span>{sections.length} sections</span>
+        <footer className="flex items-center justify-between gap-3 border-t border-border-soft bg-bg-1 px-4 py-2 font-mono text-[10px] text-text-4">
+          <button
+            type="button"
+            onClick={handleTour}
+            className="inline-flex items-center gap-1.5 rounded-sm border border-border-soft bg-bg-2 px-2 py-1 text-[10px] text-text-2 hover:border-accent-500/50 hover:bg-bg-3 hover:text-text-1"
+          >
+            <PlayCircle size={12} strokeWidth={1.75} className="text-accent-400" />
+            view tour
+          </button>
           <span>
-            press <kbd className="mx-1 rounded-sm bg-bg-3 px-1 text-text-3">?</kbd> any time ·{' '}
+            press <kbd className="mx-1 rounded-sm bg-bg-3 px-1 text-text-3">?</kbd> or{' '}
             <kbd className="mx-1 rounded-sm bg-bg-3 px-1 text-text-3">Esc</kbd> to close
           </span>
         </footer>
