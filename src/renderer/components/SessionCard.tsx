@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { GitBranch, X, RotateCw, Edit3, Copy } from 'lucide-react'
+import { GitBranch, X, RotateCw, Edit3, Copy, Pin, PinOff } from 'lucide-react'
 import type { SessionMeta, SessionState } from '../../shared/types'
 import SessionStatePill from './SessionStatePill'
 import AgentAvatar from './AgentAvatar'
 import { defaultAgentColor, hexAlpha } from '../lib/agent'
 import { fmtShortcut } from '../lib/platform'
 import { useSessions } from '../state/sessions'
+import { useSessionsPin } from '../state/sessionsExtra'
 
 interface Props {
   session: SessionMeta
@@ -77,6 +78,8 @@ export default function SessionCard({
   const accent = session.accentColor || defaultAgentColor(session.id)
   const unread = useSessions((s) => !!s.unread[session.id] && !active)
   const renameSession = useSessions((s) => s.renameSession)
+  const pinned = useSessionsPin((s) => !!s.pinned[session.id])
+  const togglePin = useSessionsPin((s) => s.togglePin)
 
   const [editingName, setEditingName] = useState(false)
   const [draftName, setDraftName] = useState(session.name)
@@ -189,8 +192,34 @@ export default function SessionCard({
             )}
             <div className="flex shrink-0 items-center gap-0.5">
               {/* hover actions appear to the LEFT of the kbd badge so the
-                  ⌘N shortcut hint is never covered by them */}
+                  ⌘N shortcut hint is never covered by them. The pin button
+                  is rendered OUTSIDE the group-hover opacity wrapper when
+                  already pinned, so a pinned session advertises its state
+                  even at rest — the filled accent icon is the whole cue. */}
+              {pinned ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    togglePin(session.id)
+                  }}
+                  className="rounded-sm bg-bg-1/85 p-1 transition hover:bg-bg-5"
+                  style={{ color: accent }}
+                  title="unpin session"
+                  aria-label="unpin session"
+                  aria-pressed="true"
+                >
+                  <Pin size={11} strokeWidth={1.75} fill="currentColor" />
+                </button>
+              ) : null}
               <div className="flex gap-0.5 opacity-0 transition group-hover:opacity-100">
+                {!pinned ? (
+                  <ActionBtn
+                    onClick={() => togglePin(session.id)}
+                    title="pin session"
+                    Icon={PinOff}
+                  />
+                ) : null}
                 {onClone ? (
                   <ActionBtn onClick={onClone} title="clone session" Icon={Copy} />
                 ) : null}

@@ -30,6 +30,23 @@ import NewSessionDialog from './components/NewSessionDialog'
 import TerminalsPanel from './components/TerminalsPanel'
 import WindowControls from './components/WindowControls'
 import OrchestraView from './orchestra/OrchestraView'
+import TourPlayer from './tour/TourPlayer'
+import TourLauncher from './tour/TourLauncher'
+import WelcomeScreen from './components/WelcomeScreen'
+
+/** Shows the welcome screen once per install by checking a localStorage
+ *  flag. Kept out of <App> so App's state stays tidy; re-opening the
+ *  welcome screen manually can be wired later via a menu item. */
+function WelcomeGate() {
+  const [open, setOpen] = useState(() => {
+    try {
+      return localStorage.getItem('hydra.welcome.shown') !== '1'
+    } catch {
+      return false
+    }
+  })
+  return <WelcomeScreen open={open} onClose={() => setOpen(false)} />
+}
 import { useOrchestra } from './orchestra/state/orchestra'
 import { useSpawnDialog } from './state/spawn'
 import {
@@ -706,6 +723,16 @@ export default function App() {
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <HelpOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />
       <NewSessionDialog open={spawnOpen} onClose={hideSpawn} />
+
+      {/* Tour overlay + launcher — render globally so every surface can
+          trigger a guided walkthrough. Visible by default for first-time
+          users; the launcher hides completed tours. */}
+      <TourPlayer />
+      <TourLauncher />
+
+      {/* First-run welcome screen — only the very first time the user
+          opens the app. After dismissal writes hydra.welcome.shown. */}
+      <WelcomeGate />
       {orchestraEnabled && orchestraOpen ? (
         <div className="fixed inset-0 z-[60] bg-bg-0">
           <OrchestraView onBackToClassic={() => setOrchestraOpen(false)} />

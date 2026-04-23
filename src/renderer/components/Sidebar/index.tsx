@@ -7,7 +7,8 @@ import {
   Terminal,
   FolderPlus,
   AlertTriangle,
-  Network
+  Network,
+  Filter
 } from 'lucide-react'
 import { useProjects } from '../../state/projects'
 import { useSessions } from '../../state/sessions'
@@ -17,6 +18,39 @@ import ProjectItem from './ProjectItem'
 import WorktreeItem from './WorktreeItem'
 import CreateWorktreeDialog from './CreateWorktreeDialog'
 import SessionStatePill from '../SessionStatePill'
+import AgentAvatar from '../AgentAvatar'
+import type { SessionMeta } from '../../../shared/types'
+
+const AGENT_GROUP_COLLAPSED_KEY = 'hydra.sidebar.agentGroupCollapsed'
+
+function readCollapsedGroups(): Set<string> {
+  try {
+    const raw = localStorage.getItem(AGENT_GROUP_COLLAPSED_KEY)
+    if (!raw) return new Set()
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return new Set()
+    return new Set(parsed.filter((v): v is string => typeof v === 'string'))
+  } catch {
+    return new Set()
+  }
+}
+
+function writeCollapsedGroups(groups: Set<string>): void {
+  try {
+    localStorage.setItem(AGENT_GROUP_COLLAPSED_KEY, JSON.stringify(Array.from(groups)))
+  } catch {
+    /* ignore quota / privacy-mode errors */
+  }
+}
+
+function groupKey(s: SessionMeta): string {
+  return s.worktreePath ?? s.cwd
+}
+
+function groupLabel(path: string): string {
+  const parts = path.split('/').filter(Boolean)
+  return parts[parts.length - 1] || path
+}
 
 interface SectionHeaderProps {
   open: boolean
@@ -74,6 +108,41 @@ export default function Sidebar() {
   const [worktreesOpen, setWorktreesOpen] = useState(true)
   const [sessionsOpen, setSessionsOpen] = useState(true)
   const [orchestraOpen, setOrchestraOpen] = useState(true)
+  const [agentsOpen, setAgentsOpen] = useState(true)
+  const [agentFilter, setAgentFilter] = useState('')
+  const [collapsedAgentGroups, setCollapsedAgentGroups] = useState<Set<string>>(() =>
+    readCollapsedGroups()
+  )
+
+  useEffect(() => {
+    writeCollapsedGroups(collapsedAgentGroups)
+  }, [collapsedAgentGroups])
+
+  const toggleAgentGroup = (key: string): void => {
+    setCollapsedAgentGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  const agentGroups = useMemo(() => {
+    const normalizedFilter = agentFilter.trim().toLowerCase()
+    const filtered = normalizedFilter
+      ? sessions.filter((s) => s.name.toLowerCase().includes(normalizedFilter))
+      : sessions
+    const byGroup = new Map<string, SessionMeta[]>()
+    for (const s of filtered) {
+      const key = groupKey(s)
+      const bucket = byGroup.get(key)
+      if (bucket) bucket.push(s)
+      else byGroup.set(key, [s])
+    }
+    return Array.from(byGroup.entries())
+      .map(([path, items]) => ({ path, items }))
+      .sort((a, b) => groupLabel(a.path).localeCompare(groupLabel(b.path)))
+  }, [sessions, agentFilter])
 
   const orchestraShortcut = fmtShortcut('A', { shift: true })
   const orchestraRunningAgents = useMemo(
@@ -153,6 +222,80 @@ export default function Sidebar() {
           </div>
         ) : (
           <>
+            {/* ACTIVE AGENTS — sessions grouped by worktree/cwd */}
+            <SectionHeader
+              open={agentsOpen}
+              onToggle={() => setAgentsOpen((v) => !v)}
+              icon={<Terminal size={11} strokeWidth={1.75} className="text-text-4" />}
+              label="Active agents"
+              action={
+                <span className="text-[10px] font-mono text-text-4">{sessions.length}</span>
+              }
+            />
+            {agentsOpen && (
+              <div className="mb-3 flex flex-col gap-0.5 px-1">
+                <div className="mb-1 flex items-center gap-1.5 rounded-sm bg-bg-3/60 px-2 py-1">
+                  <Filter size={11} strokeWidth={1.75} className="shrink-0 text-text-4" />
+                  <input
+                    type="text"
+                    value={agentFilter}
+                    onChange={(e) => setAgentFilter(e.target.value)}
+                    placeholder="filter agents…"
+                    className="min-w-0 flex-1 bg-transparent text-[11px] text-text-2 placeholder:text-text-4 focus:outline-none"
+                    aria-label="Filter active agents by name"
+                  />
+                </div>
+                {sessions.length === 0 ? (
+                  <div className="px-3 py-2 text-xs text-text-4">no active agents</div>
+                ) : agentGroups.length === 0 ? (
+                  <div className="px-3 py-2 text-xs text-text-4">no matches</div>
+                ) : (
+                  agentGroups.map(({ path, items }) => {
+                    const collapsed = collapsedAgentGroups.has(path)
+                    const GroupChevron = collapsed ? ChevronRight : ChevronDown
+                    return (
+                      <div key={path} className="flex flex-col gap-0.5">
+                        <button
+                          type="button"
+                          onClick={() => toggleAgentGroup(path)}
+                          className="group flex items-center gap-1.5 rounded-sm px-2 py-1 text-left text-xs text-text-2 transition-colors hover:bg-bg-3 hover:text-text-1"
+                          title={path}
+                          aria-expanded={!collapsed}
+                        >
+                          <GroupChevron
+                            size={12}
+                            strokeWidth={1.75}
+                            className="shrink-0 text-text-4"
+                          />
+                          <span className="flex-1 truncate">{groupLabel(path)}</span>
+                          <span className="shrink-0 rounded-sm bg-bg-3 px-1.5 py-0.5 font-mono text-[10px] text-text-4 group-hover:bg-accent-500/15 group-hover:text-accent-500">
+                            {items.length}
+                          </span>
+                        </button>
+                        {!collapsed && (
+                          <div className="flex flex-col gap-0.5">
+                            {items.map((s) => (
+                              <button
+                                key={s.id}
+                                type="button"
+                                onClick={() => setActiveSession(s.id)}
+                                className="group flex items-center gap-2 rounded-sm py-1 pl-6 pr-2 text-left text-xs text-text-2 transition-colors hover:bg-bg-3 hover:text-text-1"
+                                title={s.worktreePath ?? s.cwd}
+                              >
+                                <AgentAvatar session={s} size={18} ring={false} />
+                                <span className="flex-1 truncate">{s.name}</span>
+                                <SessionStatePill state={s.state} label={false} />
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+            )}
+
             {/* PROJECTS */}
             <SectionHeader
               open={projectsOpen}
