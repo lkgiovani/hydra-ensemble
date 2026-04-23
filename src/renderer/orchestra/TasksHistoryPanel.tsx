@@ -15,6 +15,7 @@ import { CircleCheck, CircleX, RotateCcw } from 'lucide-react'
 import type { Route, Task, TaskStatus, UUID } from '../../shared/orchestra'
 import { useOrchestra } from './state/orchestra'
 import { useToasts } from '../state/toasts'
+import { humanReason } from './routeReason'
 
 type FilterKey = 'all' | 'done' | 'failed'
 
@@ -301,11 +302,15 @@ function HistoryRow({
   // last reason is the next-best explanation. Done tasks only show a
   // reason when it came from the router ("delegation: ...") since a vanilla
   // success message would just be noise.
-  const subtitleReason = !isDone
+  const rawReason = !isDone
     ? (task.blockedReason ?? route?.reason ?? null)
     : route?.reason?.startsWith('delegation:')
       ? route.reason
       : null
+  // blockedReason is free-form user text (e.g. 'cancelled'); reason is the
+  // machine tag from the router. Only run humanReason over the latter.
+  const subtitleReason =
+    rawReason && rawReason === route?.reason ? humanReason(rawReason) : rawReason
 
   return (
     <div

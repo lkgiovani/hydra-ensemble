@@ -351,7 +351,9 @@ export default function NewTaskDialog({ open, onClose }: Props) {
                 onChange={(e) => setAssignee(e.target.value)}
                 className="w-full appearance-none rounded-sm border border-border-mid bg-bg-1 px-2 py-1.5 pr-7 font-mono text-xs text-text-1 focus:border-accent-500 focus:outline-none"
               >
-                <option value={AUTO}>Auto-route (let Orchestra pick)</option>
+                <option value={AUTO}>
+                  Auto-route (matches triggers; else falls back to main agent)
+                </option>
                 <option value={MAIN} disabled={!mainAgent}>
                   {mainAgent
                     ? `Main agent (${mainAgent.name})`
