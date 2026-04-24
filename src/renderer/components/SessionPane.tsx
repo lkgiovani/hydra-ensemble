@@ -7,6 +7,7 @@ import { RotateCw, AlertTriangle, Trash2, Loader2 } from 'lucide-react'
 import type { SessionMeta } from '../../shared/types'
 import { useSessions } from '../state/sessions'
 import { isBoundEvent } from '../state/keybinds'
+import { isMac } from '../lib/platform'
 import ChatView from './chat/ChatView'
 
 interface Props {
@@ -64,16 +65,59 @@ export default function SessionPane({ session, visible }: Props) {
     term.loadAddon(fit)
     term.loadAddon(new WebLinksAddon())
     term.open(container)
-    // Let global keybinds win before xterm forwards the keystroke to the
-    // PTY. Without this, pressing e.g. mod+t with the terminal focused
-    // would both toggle the Projects drawer AND write "t" into claude's
-    // prompt. Returning false tells xterm "don't handle this" — the
-    // window-level capture listener in App.tsx still fires first.
-    term.attachCustomKeyEventHandler((e) => !isBoundEvent(e))
-    termRef.current = term
-    fitRef.current = fit
 
     const ptyId = session.ptyId
+
+    // Clipboard shortcuts.
+    //   macOS:  ⌘C copies, ⌘V pastes (standard mac terminal).
+    //   Linux/Win: Ctrl+Shift+C / Ctrl+Shift+V — Ctrl+C alone has to
+    //     stay reserved for SIGINT so the shell can interrupt.
+    // Returning false from the handler tells xterm "don't forward this
+    // keystroke to the PTY", so `C` doesn't leak into the prompt.
+    const onKeyEvent = (e: KeyboardEvent): boolean => {
+      // Global keybinds still win.
+      if (isBoundEvent(e)) return false
+      if (e.type !== 'keydown') return true
+      const mac = isMac()
+      const copyCombo = mac
+        ? e.metaKey && !e.shiftKey && !e.ctrlKey && e.key.toLowerCase() === 'c'
+        : e.ctrlKey && e.shiftKey && !e.metaKey && e.key.toLowerCase() === 'c'
+      const pasteCombo = mac
+        ? e.metaKey && !e.shiftKey && !e.ctrlKey && e.key.toLowerCase() === 'v'
+        : e.ctrlKey && e.shiftKey && !e.metaKey && e.key.toLowerCase() === 'v'
+      if (copyCombo) {
+        const sel = term.getSelection()
+        if (sel && sel.length > 0) {
+          e.preventDefault()
+          void navigator.clipboard.writeText(sel).catch(() => undefined)
+        }
+        return false
+      }
+      if (pasteCombo) {
+        e.preventDefault()
+        void navigator.clipboard
+          .readText()
+          .then((text) => {
+            if (text) void window.api.pty.write(ptyId, text)
+          })
+          .catch(() => undefined)
+        return false
+      }
+      return true
+    }
+    term.attachCustomKeyEventHandler(onKeyEvent)
+
+    // Auto-copy on mouse selection — Linux "primary selection" vibe,
+    // but routed through the regular system clipboard so Electron +
+    // the WM agree. Skipped silently when the page isn't focused
+    // (clipboard API throws a DOMException in that state).
+    const selectionSub = term.onSelectionChange(() => {
+      const sel = term.getSelection()
+      if (!sel || sel.length === 0) return
+      void navigator.clipboard.writeText(sel).catch(() => undefined)
+    })
+    termRef.current = term
+    fitRef.current = fit
 
     const fitSafely = (): void => {
       try {
@@ -155,6 +199,7 @@ export default function SessionPane({ session, visible }: Props) {
       offData()
       offExit()
       onInput.dispose()
+      selectionSub.dispose()
       term.dispose()
       termRef.current = null
       fitRef.current = null
