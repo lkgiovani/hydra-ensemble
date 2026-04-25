@@ -91,23 +91,21 @@ export default function StarOnGithub(): React.ReactElement | null {
           <X size={14} strokeWidth={1.75} />
         </button>
 
-        {/* Hero — accent gradient strip with a pulsing star */}
-        <div
-          className="relative flex h-32 items-center justify-center overflow-hidden border-b border-border-soft"
-          style={{
-            background:
-              'radial-gradient(ellipse at 50% 60%, rgba(255,107,77,0.25) 0%, rgba(255,107,77,0.05) 60%, transparent 100%)'
-          }}
-        >
-          {/* Soft pulsing halo behind the star */}
+        {/* Hero — pulsing star, no extra background. The bg-bg-2 of the
+            modal is already darker than its surroundings; layering a
+            radial gradient behind the star washed the icon out. */}
+        <div className="relative flex h-32 items-center justify-center overflow-hidden border-b border-border-soft">
+          {/* Soft pulsing halo behind the star — two stacked rings:
+              the outer one ping-fades to invite the eye, the inner one
+              breathes at a slower tempo so the centre never goes flat. */}
           <span
             aria-hidden
-            className="absolute h-24 w-24 animate-ping rounded-full bg-accent-500/15"
+            className="absolute h-24 w-24 animate-ping rounded-full bg-accent-500/20"
             style={{ animationDuration: '2.4s' }}
           />
           <span
             aria-hidden
-            className="absolute h-16 w-16 rounded-full bg-accent-500/20 df-pulse"
+            className="absolute h-16 w-16 rounded-full bg-accent-500/25 df-pulse"
           />
           <Star
             size={44}
