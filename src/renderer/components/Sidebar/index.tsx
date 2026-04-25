@@ -196,13 +196,13 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-border-soft bg-bg-2 text-text-2">
+    <aside className="flex h-full w-full shrink-0 flex-col border-r border-border-soft bg-bg-2 text-text-2">
       {/* Header row kept short and deliberately brand-less — the main
-          app header already shows "Hydra Ensemble". Duplicating it here
-          created a double-logo artefact when the drawer opened. Shows
-          the drawer's purpose ("projects") as the title instead. */}
+          app header already shows "Hydra Ensemble". The drawer's
+          purpose label matches the header button that toggles it
+          ("manager") so the user can mentally pair the two. */}
       <header className="flex h-11 shrink-0 items-center gap-2 border-b border-border-soft px-3">
-        <span className="df-label">projects</span>
+        <span className="df-label">manager</span>
       </header>
 
       <div className="df-scroll flex-1 overflow-y-auto py-2">

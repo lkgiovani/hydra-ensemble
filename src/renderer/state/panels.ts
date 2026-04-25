@@ -97,6 +97,34 @@ export const useEditorSidebarSize = create<EditorSidebarSizeState>()(
   )
 )
 
+/** Manager drawer (left sidebar) width in px when open. Drag the
+ *  drawer's right edge to resize; persisted. Min keeps the agent
+ *  list legible, max stops it eating the chat column. */
+export const DRAWER_WIDTH_MIN = 200
+export const DRAWER_WIDTH_MAX = 520
+export const DRAWER_WIDTH_DEFAULT = 256
+
+interface DrawerSizeState {
+  width: number
+  setWidth: (value: number) => void
+}
+
+export const useDrawerSize = create<DrawerSizeState>()(
+  persist(
+    (set) => ({
+      width: DRAWER_WIDTH_DEFAULT,
+      setWidth: (value) => {
+        const clamped = Math.min(
+          DRAWER_WIDTH_MAX,
+          Math.max(DRAWER_WIDTH_MIN, value)
+        )
+        set({ width: clamped })
+      }
+    }),
+    { name: 'hydra.drawer-size' }
+  )
+)
+
 /** Right column (Sessions + Toolkit) width in px. Pinned to the viewport's
  *  right edge; user drags its LEFT edge to resize. */
 export const RIGHT_COLUMN_MIN = 240

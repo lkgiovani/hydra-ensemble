@@ -59,7 +59,11 @@ import {
   TOOLKIT_HEIGHT_MIN,
   TOOLKIT_HEIGHT_MAX,
   TOOLKIT_HEIGHT_DEFAULT,
-  TOOLKIT_COLLAPSED_HEIGHT
+  TOOLKIT_COLLAPSED_HEIGHT,
+  useDrawerSize,
+  DRAWER_WIDTH_MIN,
+  DRAWER_WIDTH_MAX,
+  DRAWER_WIDTH_DEFAULT
 } from './state/panels'
 import { isMac } from './lib/platform'
 import { useSessions } from './state/sessions'
@@ -115,6 +119,8 @@ export default function App() {
   const toolkitHeight = useToolkitSize((s) => s.height)
   const setToolkitHeight = useToolkitSize((s) => s.setHeight)
   const toolkitExpanded = useToolkitSize((s) => s.expanded)
+  const drawerWidth = useDrawerSize((s) => s.width)
+  const setDrawerWidth = useDrawerSize((s) => s.setWidth)
   const openPanel = useSlidePanel((s) => s.open)
   const closePanel = useSlidePanel((s) => s.close)
   const togglePanelFor = useSlidePanel((s) => s.toggle)
@@ -171,18 +177,44 @@ export default function App() {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-bg-0 text-text-1">
-      {/* Project drawer (collapsible). Same 520ms / Material easing as
-          Ctrl+Q and Ctrl+E so all three panel toggles read as one
-          motion family. */}
+      {/* Manager drawer — collapsible AND user-resizable. Width is
+          persisted (`useDrawerSize`); the right-edge handle drags to
+          resize. Same 520ms / Material easing as Ctrl+Q and Ctrl+E so
+          all three panel toggles read as one motion family. */}
       <div
-        className={`shrink-0 overflow-hidden border-r border-border-soft ${
-          drawerOpen ? 'w-64' : 'w-0'
-        }`}
+        className="relative shrink-0 overflow-hidden border-r border-border-soft"
         style={{
+          width: drawerOpen ? `${drawerWidth}px` : 0,
           transition: 'width 520ms cubic-bezier(0.4, 0, 0.2, 1)'
         }}
       >
         <Sidebar />
+        {drawerOpen ? (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize manager drawer"
+            className="absolute right-0 top-0 z-30 h-full w-1 cursor-col-resize bg-transparent transition-colors hover:bg-accent-500/40 active:bg-accent-500/60"
+            onMouseDown={(e) => {
+              e.preventDefault()
+              const startX = e.clientX
+              const startWidth = drawerWidth
+              const onMove = (ev: MouseEvent): void => {
+                setDrawerWidth(startWidth + (ev.clientX - startX))
+              }
+              const onUp = (): void => {
+                document.removeEventListener('mousemove', onMove)
+                document.removeEventListener('mouseup', onUp)
+                document.body.style.userSelect = ''
+              }
+              document.body.style.userSelect = 'none'
+              document.addEventListener('mousemove', onMove)
+              document.addEventListener('mouseup', onUp)
+            }}
+            onDoubleClick={() => setDrawerWidth(DRAWER_WIDTH_DEFAULT)}
+            title="Drag to resize · double-click to reset"
+          />
+        ) : null}
       </div>
 
       {/* Main column: header, terminal, status bar */}
@@ -260,7 +292,7 @@ export default function App() {
             <HeaderButton
               icon={<TerminalIcon size={13} strokeWidth={1.75} />}
               label="terminals"
-              shortcut={`${fmtShortcut('').slice(0, -1)}\``}
+              shortcut={`${fmtShortcut('')}\``}
               active={terminalsVisible}
               onClick={toggleTerminals}
               dataTourId="header-terminals"
