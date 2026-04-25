@@ -106,10 +106,19 @@ export default function TourHost() {
     }
   }, [step])
 
-  // Run the step's `before` hook and auto-skip when `skipIf` is true.
-  // Kept in its own effect so the anchor re-measure above isn't
-  // coupled to this prerequisite plumbing.
+  // Run the step's `before` hook on entry and the PREVIOUS step's
+  // `after` hook on exit. Tracks the prior step in a ref so we fire
+  // `after` regardless of direction (next OR back) — without this, a
+  // before-hook that opened a modal would leave it dangling when the
+  // user navigated backwards, making "back" appear to do nothing
+  // because the modal was still on screen.
+  const prevStepRef = useRef<TourStep | null>(null)
   useEffect(() => {
+    const prev = prevStepRef.current
+    if (prev && prev !== step) {
+      void prev.after?.()
+    }
+    prevStepRef.current = step
     if (!step) return
     if (step.skipIf?.() === true) {
       next()
@@ -192,64 +201,31 @@ export default function TourHost() {
 
   if (!tour || !step) return null
 
-  // Spotlight: either 4 rects around the anchor, or a single full-screen
-  // scrim for centered/no-anchor steps.
+  // Spotlight strategy:
+  //
+  //   - With an anchor → ONLY the halo + ring around the anchor; no
+  //     scrim rects. The original 4-rect dim was meant to focus the
+  //     eye, but it also smothered any modal that the anchor lived
+  //     inside (a full app dialog at z-68 ended up under z-95 scrim
+  //     rects, looking dim and broken). The pulsing halo alone is
+  //     enough visual cue, and the underlying app stays readable.
+  //
+  //   - Without an anchor (centered step) → light backdrop instead of
+  //     the previous heavy /80 + blur. The card has its own border +
+  //     shadow so it stands out without darkening the entire UI.
   const scrim = anchorRect ? (
-    <>
-      {/* top */}
-      <div
-        className="pointer-events-none fixed bg-bg-0/75 backdrop-blur-[1px]"
-        style={{
-          left: 0,
-          right: 0,
-          top: 0,
-          height: Math.max(0, anchorRect.y - SPOTLIGHT_PAD)
-        }}
-      />
-      {/* bottom */}
-      <div
-        className="pointer-events-none fixed bg-bg-0/75 backdrop-blur-[1px]"
-        style={{
-          left: 0,
-          right: 0,
-          top: anchorRect.y + anchorRect.h + SPOTLIGHT_PAD,
-          bottom: 0
-        }}
-      />
-      {/* left */}
-      <div
-        className="pointer-events-none fixed bg-bg-0/75 backdrop-blur-[1px]"
-        style={{
-          left: 0,
-          top: Math.max(0, anchorRect.y - SPOTLIGHT_PAD),
-          width: Math.max(0, anchorRect.x - SPOTLIGHT_PAD),
-          height: anchorRect.h + SPOTLIGHT_PAD * 2
-        }}
-      />
-      {/* right */}
-      <div
-        className="pointer-events-none fixed bg-bg-0/75 backdrop-blur-[1px]"
-        style={{
-          left: anchorRect.x + anchorRect.w + SPOTLIGHT_PAD,
-          right: 0,
-          top: Math.max(0, anchorRect.y - SPOTLIGHT_PAD),
-          height: anchorRect.h + SPOTLIGHT_PAD * 2
-        }}
-      />
-      {/* halo around the anchor itself */}
-      <div
-        className="pointer-events-none fixed rounded-md ring-2 ring-accent-500/70 transition-[top,left,width,height] duration-200 df-pulse"
-        style={{
-          left: anchorRect.x - SPOTLIGHT_PAD,
-          top: anchorRect.y - SPOTLIGHT_PAD,
-          width: anchorRect.w + SPOTLIGHT_PAD * 2,
-          height: anchorRect.h + SPOTLIGHT_PAD * 2,
-          boxShadow: '0 0 40px 4px var(--color-accent-alpha-35)'
-        }}
-      />
-    </>
+    <div
+      className="pointer-events-none fixed rounded-md ring-2 ring-accent-500/70 transition-[top,left,width,height] duration-200 df-pulse"
+      style={{
+        left: anchorRect.x - SPOTLIGHT_PAD,
+        top: anchorRect.y - SPOTLIGHT_PAD,
+        width: anchorRect.w + SPOTLIGHT_PAD * 2,
+        height: anchorRect.h + SPOTLIGHT_PAD * 2,
+        boxShadow: '0 0 40px 4px var(--color-accent-alpha-35)'
+      }}
+    />
   ) : (
-    <div className="pointer-events-none fixed inset-0 bg-bg-0/80 backdrop-blur-sm" />
+    <div className="pointer-events-none fixed inset-0 bg-bg-0/35" />
   )
 
   return createPortal(
