@@ -80,11 +80,9 @@ export default function NewSessionDialog({ open, onClose }: Props) {
   const [freshConfig, setFreshConfig] = useState(false)
   const [provider, setProvider] = useState<Provider>(() => readLastProvider())
   const providerSpec = PROVIDER_SPECS[provider]
-  const [model, setModel] = useState<string>(
-    () => PROVIDER_SPECS[readLastProvider()].defaultModel ?? ''
-  )
   const [useApiKey, setUseApiKey] = useState(false)
   const [apiKey, setApiKey] = useState('')
+  const [apiKeyName, setApiKeyName] = useState('')
   const [showApiKey, setShowApiKey] = useState(false)
 
   // Sync picked project with current when dialog opens
@@ -100,17 +98,18 @@ export default function NewSessionDialog({ open, onClose }: Props) {
     setFreshConfig(false)
     const last = readLastProvider()
     setProvider(last)
-    setModel(PROVIDER_SPECS[last].defaultModel ?? '')
     setUseApiKey(false)
     setApiKey('')
+    setApiKeyName('')
     setShowApiKey(false)
   }, [open, currentPath])
 
-  // When the provider changes, snap the model to its default and persist
-  // the choice so the next open of the dialog reflects the user's pick.
+  // When the provider changes, persist the choice so the next open of
+  // the dialog reflects the user's pick. Model selection is no longer
+  // exposed in the dialog — Codex/Copilot pick internally, Claude is
+  // pinned to Opus 4.7 via PROVIDER_SPECS.
   useEffect(() => {
     persistLastProvider(provider)
-    setModel(PROVIDER_SPECS[provider].defaultModel ?? '')
     // The api-key toggle only applies to providers that support keys —
     // dropping back to a keyless provider (copilot) clears it implicitly.
     if (!PROVIDER_SPECS[provider].apiKeyEnv) {
@@ -159,9 +158,11 @@ export default function NewSessionDialog({ open, onClose }: Props) {
         branch,
         name: name.trim() || undefined,
         viewMode,
-        freshConfig,
+        // When the user supplies an API key we IGNORE the global/fresh
+        // toggle — the key supersedes account auth, and isolating a
+        // fresh config dir for an env-only auth would just be churn.
+        freshConfig: keyToSend ? false : freshConfig,
         provider,
-        model: providerSpec.hasModelPicker ? model : undefined,
         apiKey: keyToSend
       })
       onClose()
@@ -199,7 +200,7 @@ export default function NewSessionDialog({ open, onClose }: Props) {
       }}
     >
       <div
-        className="flex w-full max-w-lg flex-col overflow-hidden border border-border-mid bg-bg-2 shadow-pop"
+        className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden border border-border-mid bg-bg-2 shadow-pop"
         style={{ borderRadius: 'var(--radius-lg)' }}
       >
         <header className="flex items-center justify-between border-b border-border-soft bg-bg-1 px-4 py-2.5">
@@ -217,9 +218,14 @@ export default function NewSessionDialog({ open, onClose }: Props) {
           </button>
         </header>
 
-        <div className="space-y-4 p-4">
+        {/* 2-column grid (collapses to 1 col on narrow screens). The
+            wide rows (PROJECT, AGENT, ACCOUNT) span both columns; the
+            narrower fields (WORKTREE, NAME, VIEW, API KEY) lay out
+            side-by-side. Inner container scrolls if it ever exceeds
+            90vh — keeps the dialog usable on short screens. */}
+        <div className="grid max-h-[calc(90vh-7rem)] grid-cols-1 gap-x-5 gap-y-4 overflow-y-auto p-5 lg:grid-cols-2">
           {/* Project */}
-          <div>
+          <div className="lg:col-span-2">
             <label className="df-label mb-1.5 flex items-center justify-between">
               <span>project</span>
               <button
@@ -405,7 +411,7 @@ export default function NewSessionDialog({ open, onClose }: Props) {
           </div>
 
           {/* View mode selector — CLI (raw xterm) vs visual chat. */}
-          <div>
+          <div className="lg:col-span-2">
             <label className="df-label mb-1.5 block">view</label>
             <div className="grid grid-cols-2 gap-2">
               <button
@@ -456,9 +462,10 @@ export default function NewSessionDialog({ open, onClose }: Props) {
             </div>
           </div>
 
-          {/* Provider — pick the agent CLI this session runs. The
-              dropdown immediately below switches available models. */}
-          <div>
+          {/* Provider — pick the agent CLI this session runs. Codex and
+              Copilot manage their own model selection inside the TUI;
+              Claude is pinned to Opus 4.7 via PROVIDER_SPECS. */}
+          <div className="lg:col-span-2">
             <label className="df-label mb-1.5 block">agent</label>
             <div className="grid grid-cols-3 gap-2">
               {PROVIDER_ORDER.map((p) => {
@@ -499,24 +506,6 @@ export default function NewSessionDialog({ open, onClose }: Props) {
             </div>
           </div>
 
-          {/* Model — only providers with a curated list show this. */}
-          {providerSpec.hasModelPicker && providerSpec.models ? (
-            <div>
-              <label className="df-label mb-1.5 block">model</label>
-              <select
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                className="w-full rounded-sm border border-border-mid bg-bg-1 px-2.5 py-1.5 font-mono text-sm text-text-1 focus:border-accent-500 focus:outline-none"
-              >
-                {providerSpec.models.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : null}
-
           {/* API key (chavinha) — only providers with an apiKeyEnv. The
               key is exported into the spawn's PTY env and never written
               to disk. Toggling off blanks the field on close. */}
@@ -535,34 +524,69 @@ export default function NewSessionDialog({ open, onClose }: Props) {
                 </label>
               </div>
               {useApiKey ? (
-                <div className="relative">
-                  <KeyRound
-                    size={12}
-                    strokeWidth={1.75}
-                    className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-text-4"
-                  />
-                  <input
-                    type={showApiKey ? 'text' : 'password'}
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    placeholder={`exported as ${providerSpec.apiKeyEnv}`}
-                    autoComplete="off"
-                    spellCheck={false}
-                    className="w-full rounded-sm border border-border-mid bg-bg-1 pl-7 pr-9 py-1.5 font-mono text-sm text-text-1 placeholder:text-text-4 focus:border-accent-500 focus:outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowApiKey((v) => !v)}
-                    className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-sm p-1 text-text-4 hover:bg-bg-3 hover:text-text-1"
-                    title={showApiKey ? 'hide key' : 'show key'}
-                    aria-label={showApiKey ? 'hide key' : 'show key'}
-                  >
-                    {showApiKey ? (
-                      <EyeOff size={12} strokeWidth={1.75} />
-                    ) : (
-                      <Eye size={12} strokeWidth={1.75} />
-                    )}
-                  </button>
+                <div className="space-y-2">
+                  {/* NAME — clearly labelled. Will be the human-readable
+                      handle when this key is saved to the vault for
+                      reuse in future sessions. Required when "save"
+                      is on (TODO: vault wiring). */}
+                  <div>
+                    <label className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-accent-300">
+                      <span>name</span>
+                      <span className="rounded-sm bg-accent-500/15 px-1 py-px text-[9px] font-medium text-accent-200">
+                        label
+                      </span>
+                      <span className="text-text-4 normal-case tracking-normal">
+                        — friendly name for this key (e.g. "personal", "work")
+                      </span>
+                    </label>
+                    <input
+                      type="text"
+                      value={apiKeyName}
+                      onChange={(e) => setApiKeyName(e.target.value)}
+                      placeholder="e.g. personal-openai"
+                      autoComplete="off"
+                      spellCheck={false}
+                      className="w-full rounded-sm border border-border-mid bg-bg-1 px-2.5 py-1.5 font-mono text-sm text-text-1 placeholder:text-text-4 focus:border-accent-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.18em] text-text-3">
+                      key value
+                    </label>
+                    <div className="relative">
+                      <KeyRound
+                        size={12}
+                        strokeWidth={1.75}
+                        className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-text-4"
+                      />
+                      <input
+                        type={showApiKey ? 'text' : 'password'}
+                        value={apiKey}
+                        onChange={(e) => setApiKey(e.target.value)}
+                        placeholder={`exported as ${providerSpec.apiKeyEnv}`}
+                        autoComplete="off"
+                        spellCheck={false}
+                        className="w-full rounded-sm border border-border-mid bg-bg-1 pl-7 pr-9 py-1.5 font-mono text-sm text-text-1 placeholder:text-text-4 focus:border-accent-500 focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowApiKey((v) => !v)}
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-sm p-1 text-text-4 hover:bg-bg-3 hover:text-text-1"
+                        title={showApiKey ? 'hide key' : 'show key'}
+                        aria-label={showApiKey ? 'hide key' : 'show key'}
+                      >
+                        {showApiKey ? (
+                          <EyeOff size={12} strokeWidth={1.75} />
+                        ) : (
+                          <Eye size={12} strokeWidth={1.75} />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-[10px] leading-snug text-text-4">
+                    Key supersedes the agent&apos;s saved login — the
+                    Account selector below is disabled for this session.
+                  </p>
                 </div>
               ) : (
                 <div className="rounded-sm border border-dashed border-border-soft bg-bg-1 px-2.5 py-1.5 font-mono text-[11px] text-text-4">
@@ -575,13 +599,21 @@ export default function NewSessionDialog({ open, onClose }: Props) {
           {/* Account — share the host login (default) or run this
               session under an isolated config dir so the agent CLI
               prompts for a brand-new login. */}
-          <div>
-            <label className="df-label mb-1.5 block">account</label>
+          <div className={`lg:col-span-2 ${useApiKey ? 'opacity-50' : ''}`}>
+            <label className="df-label mb-1.5 flex items-center justify-between">
+              <span>account</span>
+              {useApiKey ? (
+                <span className="text-[10px] normal-case tracking-normal text-text-4">
+                  disabled — api key supersedes saved login
+                </span>
+              ) : null}
+            </label>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
+                disabled={useApiKey}
                 onClick={() => setFreshConfig(false)}
-                className={`flex items-start gap-2 rounded-sm border px-2.5 py-2 text-left transition ${
+                className={`flex items-start gap-2 rounded-sm border px-2.5 py-2 text-left transition disabled:cursor-not-allowed ${
                   !freshConfig
                     ? 'border-accent-500 bg-accent-500/10'
                     : 'border-border-soft bg-bg-1 hover:border-border-mid hover:bg-bg-3'
@@ -601,8 +633,9 @@ export default function NewSessionDialog({ open, onClose }: Props) {
               </button>
               <button
                 type="button"
+                disabled={useApiKey}
                 onClick={() => setFreshConfig(true)}
-                className={`flex items-start gap-2 rounded-sm border px-2.5 py-2 text-left transition ${
+                className={`flex items-start gap-2 rounded-sm border px-2.5 py-2 text-left transition disabled:cursor-not-allowed ${
                   freshConfig
                     ? 'border-accent-500 bg-accent-500/10'
                     : 'border-border-soft bg-bg-1 hover:border-border-mid hover:bg-bg-3'

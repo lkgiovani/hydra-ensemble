@@ -111,14 +111,10 @@ export class SessionManager {
     const name = opts.name?.trim() || `session-${this.sessions.size + 1}`
     const provider: Provider = opts.provider ?? 'claude'
     const spec = PROVIDER_SPECS[provider]
-    // Validate the requested model against the provider spec; fall back
-    // to the spec default when the renderer sends a stale id.
-    const model =
-      spec.hasModelPicker
-        ? (opts.model && spec.models?.includes(opts.model)
-            ? opts.model
-            : spec.defaultModel)
-        : undefined
+    // Model is resolved purely from the provider spec — Hydra no longer
+    // exposes a picker. Codex / Copilot manage model selection inside
+    // their own TUI; Claude stays pinned to Opus 4.7 via spec.defaultModel.
+    const model = spec.defaultModel
 
     let isolated: IsolatedSession
     try {
@@ -354,9 +350,10 @@ export class SessionManager {
       // don't want that drift. Users can still flip mid-session via
       // `/model` inside the chat. For other providers, model resolves
       // from the spec default.
+      // `--model` flag only when the spec declares a default. Codex
+      // and Copilot omit it (they pick their default internally).
       const model = meta.providerModel ?? spec.defaultModel
-      const modelFlag =
-        spec.hasModelPicker && model ? ` --model ${shellQuote(model)}` : ''
+      const modelFlag = model ? ` --model ${shellQuote(model)}` : ''
       const launch = binPath
         ? `${envParts.join('; ')}; clear && "${binPath}"${modelFlag}\r`
         : `clear && echo "[hydra] ${spec.binary} binary not found in PATH"\r`

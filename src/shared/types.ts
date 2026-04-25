@@ -42,13 +42,13 @@ export interface ProviderSpec {
   /** Env var for API key, when the CLI supports key-based auth.
    *  undefined when the provider only auths via its own flow (e.g. gh). */
   apiKeyEnv?: string
-  /** When true, the dialog shows a model dropdown. */
-  hasModelPicker: boolean
-  /** Default model id (passed via `--model` flag) when hasModelPicker. */
+  /** Model id passed via `--model` at spawn. Undefined means "let the
+   *  CLI pick its own default" — Codex and Copilot manage model
+   *  selection from inside their own TUI (`/model` etc), Hydra doesn't
+   *  expose a picker for them. Claude is pinned because Hydra is
+   *  intentionally an Opus-4.7-first orchestrator. */
   defaultModel?: string
-  /** Curated model options for the dropdown (raw ids). */
-  models?: string[]
-  /** Friendly hint shown under the picker explaining auth/setup. */
+  /** Friendly hint shown under the agent block explaining auth/setup. */
   authHint: string
 }
 
@@ -59,16 +59,9 @@ export const PROVIDER_SPECS: Record<Provider, ProviderSpec> = {
     binary: 'claude',
     configDirEnv: 'CLAUDE_CONFIG_DIR',
     apiKeyEnv: 'ANTHROPIC_API_KEY',
-    hasModelPicker: true,
     defaultModel: 'claude-opus-4-7',
-    models: [
-      'claude-opus-4-7',
-      'claude-opus-4-7[1m]',
-      'claude-sonnet-4-6',
-      'claude-haiku-4-5'
-    ],
     authHint:
-      'Auths via Claude CLI browser flow by default. Set an API key to override.'
+      'Auths via Claude CLI browser flow by default. Set an API key to override. Pinned to Opus 4.7.'
   },
   codex: {
     id: 'codex',
@@ -76,11 +69,8 @@ export const PROVIDER_SPECS: Record<Provider, ProviderSpec> = {
     binary: 'codex',
     configDirEnv: 'CODEX_HOME',
     apiKeyEnv: 'OPENAI_API_KEY',
-    hasModelPicker: true,
-    defaultModel: 'gpt-5',
-    models: ['gpt-5', 'gpt-4o', 'gpt-4o-mini', 'o3', 'o3-mini'],
     authHint:
-      'Requires OPENAI_API_KEY (set per session below) or `codex login` in the CLI.'
+      'Requires OPENAI_API_KEY (set per session below) or `codex login` in the CLI. Switch models inside the agent with `/model`.'
   },
   copilot: {
     id: 'copilot',
@@ -88,9 +78,8 @@ export const PROVIDER_SPECS: Record<Provider, ProviderSpec> = {
     binary: 'copilot',
     configDirEnv: 'GH_CONFIG_DIR',
     apiKeyEnv: undefined,
-    hasModelPicker: false,
     authHint:
-      'Uses GitHub CLI auth (`gh auth login`). Fresh mode requires re-auth in the new isolated config dir.'
+      'Uses GitHub CLI auth (`gh auth login`). Fresh mode requires re-auth in the new isolated config dir. Models picked inside the CLI.'
   }
 }
 
