@@ -127,8 +127,11 @@ export default function StarOnGithub(): React.ReactElement | null {
           </p>
         </div>
 
-        {/* Actions */}
-        <div className="flex flex-col gap-2 border-t border-border-soft bg-bg-1 px-5 py-4">
+        {/* Actions — same bg as the body so the modal reads as one
+            unified surface. Border above is enough visual separation;
+            the previous bg-bg-1 footer strip was creating a dark band
+            behind the text the user flagged. */}
+        <div className="flex flex-col gap-2 border-t border-border-soft px-5 py-4">
           <a
             href={REPO_URL}
             target="_blank"
