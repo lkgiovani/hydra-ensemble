@@ -29,10 +29,25 @@ export const ACTIONS: Action[] = [
   { id: 'drawer.projects', label: 'Projects drawer', group: 'Panels', default: 'mod+t' },
   { id: 'panel.dashboard', label: 'Dashboard', group: 'Panels', default: 'mod+d' },
   { id: 'panel.editor', label: 'Code editor', group: 'Panels', default: 'mod+e' },
-  { id: 'panel.watchdogs', label: 'Watchdogs', group: 'Panels', default: 'mod+shift+w' },
-  { id: 'panel.pr', label: 'PR inspector', group: 'Panels', default: 'mod+shift+p' },
+  { id: 'panel.sessions', label: 'Hide sessions/activity panel', group: 'Panels', default: 'mod+q' },
   { id: 'palette.open', label: 'Command palette', group: 'Panels', default: 'mod+k' },
-  { id: 'help.open', label: 'Help overlay', group: 'Panels', default: '?' }
+  { id: 'help.open', label: 'Help overlay', group: 'Panels', default: '?' },
+
+  // Editor — scoped to the editor pane. `editor.closeTab` shares the
+  // mod+w combo with `session.close`; the dispatcher prefers the
+  // editor binding when the editor is focused, otherwise falls back to
+  // session.close. Documented in the README and in this block.
+  { id: 'editor.save', label: 'Save file', group: 'Editor', default: 'mod+s' },
+  { id: 'editor.saveAll', label: 'Save all files', group: 'Editor', default: 'mod+alt+s' },
+  { id: 'editor.closeTab', label: 'Close active tab', group: 'Editor', default: 'mod+w' },
+  { id: 'editor.nextTab', label: 'Next tab', group: 'Editor', default: 'mod+alt+]' },
+  { id: 'editor.prevTab', label: 'Previous tab', group: 'Editor', default: 'mod+alt+[' },
+  { id: 'editor.focusTree', label: 'Focus file tree', group: 'Editor', default: 'mod+1' },
+  { id: 'editor.focusEditor', label: 'Focus code editor', group: 'Editor', default: 'mod+2' },
+  { id: 'editor.toggleSidebar', label: 'Toggle file sidebar', group: 'Editor', default: 'mod+b' },
+  { id: 'editor.commentToggle', label: 'Toggle line comment', group: 'Editor', default: 'mod+/' },
+  { id: 'editor.gotoLine', label: 'Go to line', group: 'Editor', default: 'mod+g' },
+  { id: 'editor.toggleVim', label: 'Toggle vim mode', group: 'Editor', default: '' }
 ]
 
 interface KeybindsState {

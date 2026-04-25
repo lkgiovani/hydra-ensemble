@@ -5,6 +5,7 @@ import AgentAvatar from './AgentAvatar'
 import SessionStatePill from './SessionStatePill'
 import AgentEditDialog from './AgentEditDialog'
 import { defaultAgentColor, hexAlpha } from '../lib/agent'
+import { formatModel } from './StatusBar'
 
 interface Props {
   session: SessionMeta
@@ -75,7 +76,7 @@ export default function ActiveAgentBar({ session, onRestart }: Props) {
         <span className="font-mono text-text-4">·</span>
         <span className="font-mono">
           <span className="text-text-4">model</span>{' '}
-          <span className="text-text-2">{session.model ?? '—'}</span>
+          <span className="text-text-2">{formatModel(session.model)}</span>
         </span>
         <span className="h-5 w-px bg-border-soft" aria-hidden />
         <button

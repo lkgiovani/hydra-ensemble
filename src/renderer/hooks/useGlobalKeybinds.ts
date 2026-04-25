@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useKeybinds, resolveBind } from '../state/keybinds'
 import { comboFromEvent, matchesCombo } from '../lib/keybind'
 import { hasMod } from '../lib/platform'
-import type { PanelKind } from '../state/panels'
+import { useRightPanel, type PanelKind } from '../state/panels'
 
 /**
  * Global keybind dispatcher previously embedded in App.tsx.
@@ -25,11 +25,8 @@ export interface GlobalKeybindDeps {
   setActive: (id: string) => void
   togglePanelFor: (id: PanelKind) => void
   setDrawerOpen: (next: (v: boolean) => boolean) => void
-  openPanel: (id: PanelKind) => void
-  closePanel: () => void
   activePanel: PanelKind | null
   toggleTerminals: () => void
-  openGh: (cwd: string) => void
   contextCwd: string | null
   setPaletteOpen: (next: (v: boolean) => boolean) => void
   setHelpOpen: (next: (v: boolean) => boolean) => void
@@ -49,11 +46,8 @@ export function useGlobalKeybinds(deps: GlobalKeybindDeps): void {
     setActive,
     togglePanelFor,
     setDrawerOpen,
-    openPanel,
-    closePanel,
     activePanel,
     toggleTerminals,
-    openGh,
     contextCwd,
     setPaletteOpen,
     setHelpOpen
@@ -87,15 +81,7 @@ export function useGlobalKeybinds(deps: GlobalKeybindDeps): void {
       'drawer.projects': () => setDrawerOpen((v) => !v),
       'panel.dashboard': () => togglePanelFor('dashboard'),
       'panel.editor': () => togglePanelFor('editor'),
-      'panel.watchdogs': () => togglePanelFor('watchdogs'),
-      'panel.pr': () => {
-        if (!contextCwd) return
-        if (activePanel === 'pr') closePanel()
-        else {
-          openGh(contextCwd)
-          openPanel('pr')
-        }
-      },
+      'panel.sessions': () => useRightPanel.getState().toggle(),
       'palette.open': () => setPaletteOpen((v) => !v),
       'help.open': () => setHelpOpen((v) => !v)
     }
@@ -136,11 +122,24 @@ export function useGlobalKeybinds(deps: GlobalKeybindDeps): void {
       // Session jump 1..9 stays hardcoded — too many to expose as actions.
       // Check both `e.key` and `e.code` so xterm (which normalises the
       // key differently) doesn't swallow this before us.
+      //
+      // Editor-scope override: when the editor is the active panel and
+      // the user pressed mod+1 or mod+2, defer to editor.focusTree /
+      // editor.focusEditor instead of jumping sessions. Without this
+      // gate, focusing the file tree would silently swap the active
+      // agent — bad surprise for the user.
       if (!inField && hasMod(e) && !e.shiftKey) {
         const digitFromKey = /^[0-9]$/.test(e.key) ? e.key : null
         const digitFromCode = /^Digit([0-9])$/.exec(e.code)?.[1] ?? null
         const digit = digitFromKey ?? digitFromCode
         if (digit) {
+          if (
+            activePanel === 'editor' &&
+            (digit === '1' || digit === '2')
+          ) {
+            // editor.focusTree / focusEditor will pick this up.
+            return
+          }
           const idx = digit === '0' ? 9 : Number.parseInt(digit, 10) - 1
           const target = sessions[idx]
           if (!target) return
@@ -153,9 +152,35 @@ export function useGlobalKeybinds(deps: GlobalKeybindDeps): void {
 
       // Generic dispatcher: walk every action and try to match its
       // current combo. First match wins.
+      //
+      // Editor-scope priority: when the editor pane is active, defer
+      // to the editor's own handler for shortcuts that overlap with
+      // editor.* actions. The editor's listener runs in the same
+      // capture phase but after this one (mounted later), so without
+      // this skip the user gets `session.close` instead of
+      // `editor.closeTab` and similar wrong-pane outcomes.
+      const editorIsActive = activePanel === 'editor'
+      const editorOwnedCombos: ReadonlySet<string> = new Set(
+        editorIsActive
+          ? [
+              resolveBind('editor.save', overrides),
+              resolveBind('editor.saveAll', overrides),
+              resolveBind('editor.closeTab', overrides),
+              resolveBind('editor.nextTab', overrides),
+              resolveBind('editor.prevTab', overrides),
+              resolveBind('editor.focusTree', overrides),
+              resolveBind('editor.focusEditor', overrides),
+              resolveBind('editor.toggleSidebar', overrides),
+              resolveBind('editor.commentToggle', overrides),
+              resolveBind('editor.gotoLine', overrides),
+              resolveBind('editor.toggleVim', overrides)
+            ].filter(Boolean)
+          : []
+      )
       for (const [id, run] of Object.entries(handlers)) {
         const combo = resolveBind(id, overrides)
         if (!combo) continue
+        if (editorIsActive && editorOwnedCombos.has(combo)) continue
         // The '?' / non-mod bindings shouldn't fire while typing in a field.
         if (inField && !combo.includes('mod+') && !combo.includes('shift+'))
           continue
@@ -178,8 +203,6 @@ export function useGlobalKeybinds(deps: GlobalKeybindDeps): void {
     recording,
     setBind,
     togglePanelFor,
-    openPanel,
-    closePanel,
     activePanel,
     toggleTerminals,
     createSession,
@@ -187,7 +210,6 @@ export function useGlobalKeybinds(deps: GlobalKeybindDeps): void {
     activeId,
     sessions,
     setActive,
-    openGh,
     showSpawn,
     contextCwd,
     orchestraEnabled,

@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-export type PanelKind = 'editor' | 'dashboard' | 'watchdogs' | 'pr' | 'terminals'
+export type PanelKind = 'editor' | 'dashboard' | 'terminals'
 
 interface SlidePanelState {
   current: PanelKind | null
@@ -12,9 +12,9 @@ interface SlidePanelState {
 
 /**
  * Single source of truth for the right-side slide panel.
- * Editor / Dashboard / Watchdogs / PR Inspector are mutually exclusive
- * and share the same animated slot in the main column. Opening one
- * implicitly closes the other.
+ * Editor / Dashboard / Terminals are mutually exclusive and share the
+ * same animated slot in the main column. Opening one implicitly closes
+ * the other.
  */
 export const useSlidePanel = create<SlidePanelState>((set) => ({
   current: null,
@@ -22,6 +22,27 @@ export const useSlidePanel = create<SlidePanelState>((set) => ({
   close: () => set({ current: null }),
   toggle: (k) => set((s) => ({ current: s.current === k ? null : k }))
 }))
+
+interface RightPanelState {
+  /** When true the right-side column (Sessions + Toolkit) is fully
+   *  hidden — width 0, no DOM affordance. The keybind `panel.sessions`
+   *  (default mod+q) toggles it; users bring it back via the same key
+   *  or by clicking through to the command palette. */
+  hidden: boolean
+  toggle: () => void
+  setHidden: (v: boolean) => void
+}
+
+export const useRightPanel = create<RightPanelState>()(
+  persist(
+    (set) => ({
+      hidden: false,
+      toggle: () => set((s) => ({ hidden: !s.hidden })),
+      setHidden: (v) => set({ hidden: v })
+    }),
+    { name: 'hydra.rightPanel' }
+  )
+)
 
 /** Slide panel width in px. Stored as pixels rather than a fraction so
  *  that resizing the right column (sessions+toolkit) doesn't implicitly

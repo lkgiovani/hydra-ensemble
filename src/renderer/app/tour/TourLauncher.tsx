@@ -56,13 +56,15 @@ export default function TourLauncher() {
         title="Guided tours"
         data-tour-id="header-tour"
       >
-        <span className="relative">
+        <span className="relative shrink-0">
           <Sparkles size={13} strokeWidth={1.75} />
           {hasUnseen && !open ? (
             <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-accent-500 df-pulse" />
           ) : null}
         </span>
-        <span className="font-mono">tour</span>
+        {/* Label hides at narrow header widths so the button never gets
+            cropped; the Sparkles icon + tooltip still convey intent. */}
+        <span className="hidden font-mono lg:inline">tour</span>
       </button>
 
       {open ? (

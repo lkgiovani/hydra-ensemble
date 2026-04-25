@@ -88,6 +88,15 @@ export default function SessionsPanel() {
           >
             Activity
           </button>
+          {/* Keybind chip — discoverability for the panel-hide toggle.
+              Lives next to Activity so the user always knows how to
+              dismiss the column without scanning the help overlay. */}
+          <span
+            className="ml-1 rounded-sm border border-border-soft bg-bg-3 px-1 py-px font-mono text-[9px] text-text-4"
+            title={`Hide sessions panel (${fmtShortcut('Q')})`}
+          >
+            {fmtShortcut('Q')}
+          </span>
         </div>
         <div className="flex items-center gap-0.5">
           <button

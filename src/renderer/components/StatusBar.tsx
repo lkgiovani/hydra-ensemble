@@ -22,6 +22,17 @@ function activeBranch(active: SessionMeta | undefined): string {
   return 'main'
 }
 
+/** Strip Anthropic's full model id ("claude-opus-4-7-20251001") down to
+ *  a friendly "opus 4.7" / "sonnet 4.6" / "haiku 4.5". Unknown formats
+ *  fall through unchanged so the user sees the raw value rather than a
+ *  silent miscategorisation. */
+export function formatModel(raw: string | undefined): string {
+  if (!raw) return '—'
+  const m = /claude-(opus|sonnet|haiku)-(\d+)-(\d+)/i.exec(raw)
+  if (!m) return raw
+  return `${m[1]?.toLowerCase()} ${m[2]}.${m[3]}`
+}
+
 export default function StatusBar() {
   const sessions = useSessions((s) => s.sessions)
   const activeId = useSessions((s) => s.activeId)
@@ -52,7 +63,11 @@ export default function StatusBar() {
   }, [sessions])
 
   const branch = activeBranch(active)
-  const model = active?.model ?? 'sonnet'
+  // Real model name comes from the JSONL watcher (it parses each
+  // assistant turn's metadata). Until the first turn lands, show "—"
+  // instead of guessing — the previous "sonnet" fallback misled users
+  // whose CLI default was actually opus or haiku.
+  const model = formatModel(active?.model)
   const sessionCount = sessions.length
 
   return (

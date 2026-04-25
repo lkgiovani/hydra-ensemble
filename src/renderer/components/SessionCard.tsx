@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { GitBranch, X, RotateCw, Edit3, Copy, Pin, PinOff } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { GitBranch, X, RotateCw, Edit3, Copy, Pin, PinOff, Folder, FolderTree } from 'lucide-react'
 import type { SessionMeta, SessionState } from '../../shared/types'
 import SessionStatePill from './SessionStatePill'
 import AgentAvatar from './AgentAvatar'
@@ -8,6 +8,8 @@ import { defaultAgentColor, hexAlpha } from '../lib/agent'
 import { fmtShortcut } from '../lib/platform'
 import { useSessions } from '../state/sessions'
 import { useSessionsPin } from '../state/sessionsExtra'
+import { useProjects } from '../state/projects'
+import { formatModel } from './StatusBar'
 
 interface Props {
   session: SessionMeta
@@ -81,6 +83,30 @@ export default function SessionCard({
   const renameSession = useSessions((s) => s.renameSession)
   const pinned = useSessionsPin((s) => !!s.pinned[session.id])
   const togglePin = useSessionsPin((s) => s.togglePin)
+  const projects = useProjects((s) => s.projects)
+
+  /** Repo and worktree labels derived from session paths.
+   *  - `repoName` is the friendly project name when the session's cwd
+   *    matches a known project, falling back to the cwd basename.
+   *  - `worktreeName` is the basename of `worktreePath`. We hide it when
+   *    it equals the repo basename (no extra info to show). */
+  const { repoName, worktreeName } = useMemo(() => {
+    const baseOf = (p: string | undefined): string => {
+      if (!p) return ''
+      const parts = p.split(/[/\\]/).filter(Boolean)
+      return parts[parts.length - 1] ?? p
+    }
+    const cwdBase = baseOf(session.cwd)
+    const matched = session.cwd
+      ? projects.find((p) => session.cwd === p.path)
+      : undefined
+    const repo = matched?.name ?? cwdBase
+    const wt = baseOf(session.worktreePath)
+    return {
+      repoName: repo,
+      worktreeName: wt && wt !== cwdBase && wt !== repo ? wt : ''
+    }
+  }, [session.cwd, session.worktreePath, projects])
 
   const [editingName, setEditingName] = useState(false)
   const [draftName, setDraftName] = useState(session.name)
@@ -247,12 +273,25 @@ export default function SessionCard({
         </div>
       </div>
 
-      {/* row 2: state pill + branch · model + time-since-last-change */}
+      {/* row 2: state pill | repo · branch · worktree · model | age.
+          Meta lives on one tight line so sparse cards (no branch/worktree
+          yet) don't pad themselves with empty rows. Each chip truncates
+          and the model shows last so it gets clipped first when narrow. */}
       <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px]">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <span data-tour-id="session-state-pill">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+          <span data-tour-id="session-state-pill" className="shrink-0">
             <SessionStatePill state={session.state} />
           </span>
+          {repoName ? (
+            <span
+              className="flex min-w-0 items-center gap-1 text-text-3"
+              title={session.cwd}
+            >
+              <span className="text-text-4">·</span>
+              <Folder size={9} strokeWidth={1.75} className="shrink-0 text-text-4" />
+              <span className="truncate">{repoName}</span>
+            </span>
+          ) : null}
           {session.branch ? (
             <span className="flex min-w-0 items-center gap-1 text-text-3">
               <span className="text-text-4">·</span>
@@ -260,11 +299,21 @@ export default function SessionCard({
               <span className="truncate">{session.branch}</span>
             </span>
           ) : null}
-          {session.model ? (
-            <>
+          {worktreeName ? (
+            <span
+              className="flex min-w-0 items-center gap-1 text-text-3"
+              title={session.worktreePath}
+            >
               <span className="text-text-4">·</span>
-              <span className="truncate text-text-3">{session.model}</span>
-            </>
+              <FolderTree size={9} strokeWidth={1.75} className="shrink-0 text-text-4" />
+              <span className="truncate">{worktreeName}</span>
+            </span>
+          ) : null}
+          {session.model ? (
+            <span className="flex min-w-0 items-center gap-1 text-text-4">
+              <span className="text-text-4">·</span>
+              <span className="truncate">{formatModel(session.model)}</span>
+            </span>
           ) : null}
         </div>
         {changedAt ? (
@@ -296,26 +345,28 @@ export default function SessionCard({
         </div>
       ) : null}
 
-      {/* row 4: cost + tokens — tabular nums so columns line up across cards */}
+      {/* row 4: cost + tokens grouped tight on the left; context meter
+          pushed to the right with `ml-auto`. Em-dashes signal "no JSONL
+          frame yet" (the watcher in main feeds these); actual zero
+          stays as "0". */}
       <div
         data-tour-id="session-cost-tokens"
-        className="mt-1 flex items-center gap-2 font-mono text-[10px] tabular-nums text-text-4"
-        title={`input ${session.tokensIn ?? 0} tokens · output ${session.tokensOut ?? 0} tokens${
+        className="mt-1.5 flex items-center gap-1.5 font-mono text-[10px] tabular-nums text-text-4"
+        title={`input ${session.tokensIn ?? '—'} tokens · output ${session.tokensOut ?? '—'} tokens${
           session.cost != null ? ` · cost $${session.cost.toFixed(4)}` : ''
         }`}
       >
-        {session.cost != null && session.cost > 0 ? (
-          <>
-            <span className="text-text-2">${session.cost.toFixed(2)}</span>
-            <span className="text-text-4">·</span>
-          </>
-        ) : null}
-        <span className="text-text-3">↓ {formatTokens(session.tokensIn)} in</span>
-        <span className="text-text-3">↑ {formatTokens(session.tokensOut)} out</span>
-        {/* Context-window meter pinned to the far-right so its spark bar
-             lines up across every card in the column. Hidden when we
-             have no usage yet — no point drawing a 0% bar. */}
-        <div data-tour-id="session-context-meter" className="ml-auto">
+        <span className={session.cost != null && session.cost > 0 ? 'shrink-0 text-text-2' : 'shrink-0 text-text-4'}>
+          {session.cost != null && session.cost > 0 ? `$ ${session.cost.toFixed(2)}` : '$ —'}
+        </span>
+        <span className="shrink-0 text-text-4">·</span>
+        <span className="shrink-0 text-text-3">
+          ↓ {session.tokensIn != null ? formatTokens(session.tokensIn) : '—'}
+        </span>
+        <span className="shrink-0 text-text-3">
+          ↑ {session.tokensOut != null ? formatTokens(session.tokensOut) : '—'}
+        </span>
+        <div data-tour-id="session-context-meter" className="ml-auto shrink-0">
           <ContextMeter
             used={session.contextTokens}
             model={session.model}
