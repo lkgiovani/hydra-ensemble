@@ -353,27 +353,26 @@ export default function App() {
               activePanel ? 'border-border-mid' : 'border-transparent pointer-events-none'
             }`}
             style={{
-              // Width stays FIXED at panelWidth (or full when chat is
-              // hidden) so the close animation is a clean translateX —
-              // no width-shrinking-while-translating combo. The pane
-              // lives off-screen at translateX(100%) when closed; since
-              // it's absolute and out of flow, chat reclaims the space
-              // immediately without depending on the animation.
+              // Width transition (no transform) to match the Ctrl+T
+              // projects drawer and Ctrl+Q sessions toggle — those feel
+              // elegant precisely because the pane shrinks/grows in
+              // place from its anchor edge, with internal content
+              // clipping via overflow-hidden, instead of sliding the
+              // whole subtree across the screen. Anchored to right:0;
+              // when chat is minimized we also set left:0 to fill the
+              // empty space the chat used to occupy.
               left: activePanel && chatMinimized ? 0 : 'auto',
-              width:
-                activePanel && chatMinimized ? undefined : `${panelWidth}px`,
-              minWidth:
-                activePanel && !chatMinimized ? `${PANEL_WIDTH_MIN}px` : undefined,
+              width: activePanel
+                ? chatMinimized
+                  ? undefined
+                  : `${panelWidth}px`
+                : 0,
+              minWidth: activePanel && !chatMinimized ? `${PANEL_WIDTH_MIN}px` : 0,
               maxWidth:
                 activePanel && !chatMinimized ? `${PANEL_WIDTH_MAX}px` : undefined,
               opacity: activePanel ? 1 : 0,
-              // Slower transform (420ms) for the slide so the close
-              // motion reads as deliberate, not snappy. Opacity fades
-              // a touch quicker (320ms) but still trails enough that
-              // the pane is visible during most of the slide.
               transition:
-                'transform 420ms cubic-bezier(0.32, 0.72, 0, 1), opacity 320ms cubic-bezier(0.32, 0.72, 0, 1)',
-              transform: activePanel ? 'translateX(0)' : 'translateX(100%)'
+                'width 280ms cubic-bezier(0.32, 0.72, 0, 1), min-width 280ms cubic-bezier(0.32, 0.72, 0, 1), opacity 220ms cubic-bezier(0.32, 0.72, 0, 1)'
             }}
             aria-hidden={!activePanel}
           >
