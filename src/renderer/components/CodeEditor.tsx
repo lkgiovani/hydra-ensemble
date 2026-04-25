@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
+  AlertTriangle,
   Clipboard,
   ClipboardPaste,
   Code2,
@@ -8,14 +9,15 @@ import {
   File as FileIcon,
   FolderTree,
   GitCommit,
+  Keyboard,
   Pencil,
   Save,
   Search as SearchIcon,
-  Terminal as TerminalIcon,
   Trash2,
   X,
 } from 'lucide-react'
 import { useEditor } from '../state/editor'
+import { useEditorVim } from '../state/editorSettings'
 import { useEditorTabs } from '../state/editorTabs'
 import { useSessions } from '../state/sessions'
 import {
@@ -33,6 +35,8 @@ import InlineSearch from './editor/InlineSearch'
 import SearchPanel from './editor/SearchPanel'
 import DiffView from './editor/DiffView'
 import { fmtShortcut, hasMod } from '../lib/platform'
+import { matchesCombo } from '../lib/keybind'
+import { resolveBind, useKeybinds } from '../state/keybinds'
 
 type SideTab = 'files' | 'changes' | 'search'
 
@@ -71,12 +75,39 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
   // buffer on every keystroke.
   const savedBytes = useEditor((s) => s.savedBytes)
 
+  // Toolbar compaction is driven by a ResizeObserver on the header
+  // element rather than a viewport media query: the editor pane lives
+  // inside a slide panel whose width varies independently of the
+  // window (project sidebar + sessions panel both eat horizontal
+  // space). Below ~440px we drop button labels and keep icons.
+  const headerRef = useRef<HTMLElement>(null)
+  const [headerCompact, setHeaderCompact] = useState(false)
+  useEffect(() => {
+    const el = headerRef.current
+    if (!el) return
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0]
+      if (!entry) return
+      setHeaderCompact(entry.contentRect.width < 440)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
   // Sidebar width (Files / Changes / Search pane). Persisted + drag-resizable.
   const sidebarWidth = useEditorSidebarSize((s) => s.width)
   const setSidebarWidth = useEditorSidebarSize((s) => s.setWidth)
 
-  // Vim modal bindings — persisted for the session only.
-  const [vimMode, setVimMode] = useState(false)
+  // Vim modal bindings — persisted across sessions via zustand persist.
+  const vimMode = useEditorVim((s) => s.vimMode)
+  const toggleVimMode = useEditorVim((s) => s.toggleVimMode)
+  // External-change conflict map. Read selectively so unrelated paths
+  // don't re-render the whole editor.
+  const externalChange = useEditor((s) => s.externalChange)
+  const applyExternalReload = useEditor((s) => s.applyExternalReload)
+  const dismissExternalChange = useEditor((s) => s.dismissExternalChange)
+  const openDiff = useEditor((s) => s.openDiff)
+  const sidebarCollapsed = useEditor((s) => s.sidebarCollapsed)
   // Markdown preview flag — only relevant when the active file is .md.
   const [previewMd, setPreviewMd] = useState(false)
   // Which sidebar pane is active — files tree or git changes.
@@ -267,6 +298,11 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
     null
   )
 
+  // Ref into the FileTree's root container so editor.focusTree can move
+  // focus there from anywhere. The tree itself wires the actual
+  // navigation handlers internally.
+  const treeContainerRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     if (!editorMenu) return
     const onDown = (): void => setEditorMenu(null)
@@ -297,6 +333,99 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
         onClose()
         return
       }
+
+      // Editor-scoped keybinds. Resolved on every keydown so user
+      // overrides take effect without a remount. Editor scope wins
+      // over the global session-close binding when the editor pane
+      // is open (mod+w semantically belongs to the focused tab strip).
+      const overrides = useKeybinds.getState().overrides
+      const isMatch = (id: string): boolean => {
+        const combo = resolveBind(id, overrides)
+        return !!combo && matchesCombo(e, combo)
+      }
+      if (isMatch('editor.save')) {
+        e.preventDefault()
+        e.stopPropagation()
+        void saveActive()
+        return
+      }
+      if (isMatch('editor.saveAll')) {
+        e.preventDefault()
+        e.stopPropagation()
+        void Promise.all(
+          openFiles.map(async (f) => {
+            if (f.encoding !== 'utf-8') return
+            const baseline = useEditor.getState().savedBytes[f.path]
+            if (baseline === undefined || baseline === f.bytes) return
+            useEditor.setState({ activeFilePath: f.path, activeKind: 'file' })
+            await useEditor.getState().saveActive()
+          })
+        )
+        return
+      }
+      if (isMatch('editor.closeTab')) {
+        e.preventDefault()
+        e.stopPropagation()
+        if (activeKind === 'diff' && activeDiffPath) {
+          closeDiff(activeDiffPath)
+        } else if (activeFilePath) {
+          closeFile(activeFilePath)
+        }
+        return
+      }
+      if (isMatch('editor.nextTab')) {
+        e.preventDefault()
+        e.stopPropagation()
+        if (openFiles.length === 0) return
+        const i = openFiles.findIndex((f) => f.path === activeFilePath)
+        const next = openFiles[(i + 1) % openFiles.length]
+        if (next) setActive(next.path)
+        return
+      }
+      if (isMatch('editor.prevTab')) {
+        e.preventDefault()
+        e.stopPropagation()
+        if (openFiles.length === 0) return
+        const i = openFiles.findIndex((f) => f.path === activeFilePath)
+        const prev =
+          openFiles[(i - 1 + openFiles.length) % openFiles.length]
+        if (prev) setActive(prev.path)
+        return
+      }
+      if (isMatch('editor.focusTree')) {
+        e.preventDefault()
+        e.stopPropagation()
+        const root = treeContainerRef.current
+        if (root) {
+          const focusable = root.querySelector<HTMLElement>(
+            '[data-tree-node][tabindex="0"]'
+          )
+          if (focusable) focusable.focus()
+          else root.focus()
+        }
+        return
+      }
+      if (isMatch('editor.focusEditor')) {
+        e.preventDefault()
+        e.stopPropagation()
+        const view = getActiveView()
+        if (view) view.focus()
+        return
+      }
+      if (isMatch('editor.toggleSidebar')) {
+        e.preventDefault()
+        e.stopPropagation()
+        useEditor.getState().toggleSidebar()
+        return
+      }
+      if (isMatch('editor.toggleVim')) {
+        e.preventDefault()
+        e.stopPropagation()
+        useEditorVim.getState().toggleVimMode()
+        return
+      }
+      // Mod+S fallback (kept so users without explicit overrides still
+      // get save when editor.save is somehow not bound).
       if (hasMod(e) && e.key.toLowerCase() === 's' && !e.shiftKey) {
         e.preventDefault()
         void saveActive()
@@ -348,7 +477,20 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
     // Capture phase so we beat CodeMirror's own keymap for Esc handling.
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [open, onClose, saveActive, searchOpen, sideTab])
+  }, [
+    open,
+    onClose,
+    saveActive,
+    searchOpen,
+    sideTab,
+    openFiles,
+    activeFilePath,
+    activeDiffPath,
+    activeKind,
+    closeFile,
+    closeDiff,
+    setActive
+  ])
 
   if (!open) return null
   const activeFile = openFiles.find((f) => f.path === activeFilePath) ?? null
@@ -365,62 +507,74 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
 
   const body = (
     <div className="flex h-full w-full min-w-0 flex-col overflow-hidden bg-bg-2">
-      <header className="flex shrink-0 items-center justify-between border-b border-border-soft bg-bg-2 px-3 py-2">
-        <div className="flex min-w-0 items-center gap-2 text-sm">
-          <Code2 size={14} strokeWidth={1.75} className="text-accent-400" />
-          <span className="font-semibold text-text-1">editor</span>
-          {overrideRoot ? (
+      <header
+        ref={headerRef}
+        className="flex shrink-0 items-center justify-between gap-2 border-b border-border-soft bg-bg-2 px-3 py-2"
+      >
+        <div className="flex min-w-0 flex-1 items-center gap-2 text-sm">
+          <Code2 size={14} strokeWidth={1.75} className="shrink-0 text-accent-400" />
+          {!headerCompact && (
+            <span className="shrink-0 font-semibold text-text-1">editor</span>
+          )}
+          {overrideRoot && !headerCompact ? (
             <span
-              className="flex items-center gap-1 rounded-sm border border-accent-500/40 bg-accent-500/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-accent-200"
+              className="flex shrink-0 items-center gap-1 rounded-sm border border-accent-500/40 bg-accent-500/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-accent-200"
               title={`pinned to ${overrideRoot} — close the editor to unpin`}
             >
               .claude
             </span>
           ) : null}
           {root ? (
-            <span className="truncate font-mono text-[11px] text-text-3" title={root}>
-              <span className="text-text-4">·</span> {root.split(/[/\\]/).filter(Boolean).pop() ?? root}
+            <span className="min-w-0 truncate font-mono text-[11px] text-text-3" title={root}>
+              {!headerCompact && <span className="text-text-4">·</span>}{' '}
+              {root.split(/[/\\]/).filter(Boolean).pop() ?? root}
             </span>
           ) : null}
         </div>
-        <div className="flex items-center gap-1">
+        {/* Toolbar buttons. Labels collapse to icon-only when the header
+            is below ~440px (measured by ResizeObserver — viewport media
+            queries can't see the editor's actual width inside a slide
+            panel). Tooltips carry the full intent in either mode. */}
+        <div className="flex shrink-0 items-center gap-1">
           {isMarkdown ? (
             <button
               type="button"
               onClick={() => setPreviewMd((v) => !v)}
-              className={`flex items-center gap-1 rounded-sm border px-2 py-1 text-[11px] transition ${
+              className={`flex shrink-0 items-center gap-1 rounded-sm border px-2 py-1 text-[11px] transition ${
                 previewMd
                   ? 'border-accent-500/40 bg-accent-500/10 text-accent-200'
                   : 'border-border-soft text-text-3 hover:border-border-mid hover:text-text-1'
               }`}
               title={previewMd ? 'switch to source' : 'render markdown preview'}
+              aria-label={previewMd ? 'switch to source' : 'render markdown preview'}
             >
               {previewMd ? (
                 <Pencil size={11} strokeWidth={1.75} />
               ) : (
                 <Eye size={11} strokeWidth={1.75} />
               )}
-              {previewMd ? 'source' : 'preview'}
+              {!headerCompact && (previewMd ? 'source' : 'preview')}
             </button>
           ) : null}
           <button
             type="button"
-            onClick={() => setVimMode((v) => !v)}
-            className={`flex items-center gap-1 rounded-sm border px-2 py-1 font-mono text-[11px] transition ${
+            onClick={() => toggleVimMode()}
+            className={`flex shrink-0 items-center gap-1 rounded-sm border px-2 py-1 font-mono text-[11px] transition ${
               vimMode
                 ? 'border-status-generating/40 bg-status-generating/10 text-status-generating'
                 : 'border-border-soft text-text-3 hover:border-border-mid hover:text-text-1'
             }`}
             title={vimMode ? 'disable vim bindings' : 'enable vim bindings (hjkl / i / :w / etc)'}
+            aria-label={vimMode ? 'disable vim bindings' : 'enable vim bindings'}
           >
-            <TerminalIcon size={11} strokeWidth={1.75} />
-            vim {vimMode ? 'on' : 'off'}
+            <Keyboard size={11} strokeWidth={1.75} />
+            {!headerCompact && 'vim'}
           </button>
           <button
             type="button"
             onClick={() => void saveActive()}
             disabled={!isDirty}
-            className={`flex items-center gap-1.5 rounded-sm border px-2.5 py-1 text-[11px] transition disabled:cursor-not-allowed disabled:opacity-40 ${
+            className={`flex shrink-0 items-center gap-1.5 rounded-sm border px-2 py-1 text-[11px] transition disabled:cursor-not-allowed disabled:opacity-40 ${
               isDirty
                 ? 'border-accent-500/50 bg-accent-500/15 text-accent-200 hover:bg-accent-500/25'
                 : 'border-border-soft bg-bg-3 text-text-2'
@@ -430,15 +584,15 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
                 ? `Save (${fmtShortcut('S')})`
                 : 'No unsaved changes'
             }
+            aria-label={isDirty ? 'Save (unsaved changes)' : 'Save'}
           >
             <Save size={12} strokeWidth={1.75} />
-            {isDirty ? 'save •' : 'save'}
-            <span className="font-mono text-[10px] text-text-4">{fmtShortcut('S')}</span>
+            {!headerCompact && (isDirty ? 'save •' : 'save')}
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-sm p-1.5 text-text-3 hover:bg-bg-3 hover:text-text-1"
+            className="shrink-0 rounded-sm p-1.5 text-text-3 hover:bg-bg-3 hover:text-text-1"
             aria-label="Close editor"
             title="Esc"
           >
@@ -449,12 +603,15 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <aside
-          className="relative flex shrink-0 flex-col border-r border-border-soft bg-bg-2"
+          className={`relative flex shrink-0 flex-col overflow-hidden border-r bg-bg-2 transition-[width] duration-200 ${
+            sidebarCollapsed ? 'border-transparent' : 'border-border-soft'
+          }`}
           style={{
-            width: `${sidebarWidth}px`,
-            minWidth: `${EDITOR_SIDEBAR_MIN}px`,
-            maxWidth: `${EDITOR_SIDEBAR_MAX}px`
+            width: sidebarCollapsed ? 0 : `${sidebarWidth}px`,
+            minWidth: sidebarCollapsed ? 0 : `${EDITOR_SIDEBAR_MIN}px`,
+            maxWidth: sidebarCollapsed ? 0 : `${EDITOR_SIDEBAR_MAX}px`
           }}
+          aria-hidden={sidebarCollapsed}
         >
           {/* Sidebar tabs: Search | Files | Changes. Search sits left of
               Files so Ctrl+Shift+F lands the user at the far-left anchor. */}
@@ -494,9 +651,26 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
               className={`absolute inset-0 ${sideTab === 'files' ? '' : 'hidden'}`}
               aria-hidden={sideTab !== 'files'}
             >
-              <div className="h-full">
+              <div ref={treeContainerRef} className="h-full" tabIndex={-1}>
                 {root ? (
-                  <FileTree root={root} onOpenFile={(p) => void openAndTrack(p)} />
+                  <FileTree
+                    root={root}
+                    onOpenFile={(p) => void openAndTrack(p)}
+                    sessionId={
+                      overrideRoot
+                        ? `override:${overrideRoot}`
+                        : (activeSession?.id ?? null)
+                    }
+                    breadcrumb={(() => {
+                      // "<agent.name> · <basename(root)> · <branch>"
+                      const parts: string[] = []
+                      if (activeSession?.name) parts.push(activeSession.name)
+                      const base = root.split(/[/\\]/).filter(Boolean).pop()
+                      if (base) parts.push(base)
+                      if (activeSession?.branch) parts.push(activeSession.branch)
+                      return parts.length > 0 ? parts.join(' · ') : null
+                    })()}
+                  />
                 ) : (
                   <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center">
                     <FileIcon size={28} strokeWidth={1.25} className="text-text-4" />
@@ -685,16 +859,51 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
               showPreview ? (
                 <MarkdownPreview markdown={activeFile.bytes} />
               ) : (
-                <CodeMirrorView
-                  key={activeFile.path}
-                  path={activeFile.path}
-                  initial={activeFile.bytes}
-                  onChange={(text) => updateActiveBuffer(text)}
-                  onSave={() => void saveActive()}
-                  vimMode={vimMode}
-                  diffPatch={fileDiffs[activeFile.path] ?? null}
-                  onSelectionChange={setHasEditorSelection}
-                />
+                <div className="flex h-full flex-col">
+                  {externalChange[activeFile.path] ? (
+                    <ExternalChangeBanner
+                      path={activeFile.path}
+                      deleted={!!externalChange[activeFile.path]?.deleted}
+                      onReload={async () => {
+                        await applyExternalReload(activeFile.path)
+                      }}
+                      onKeep={() => dismissExternalChange(activeFile.path)}
+                      onShowDiff={async () => {
+                        try {
+                          const fresh = await window.api.editor.readFile(
+                            activeFile.path
+                          )
+                          if (fresh.encoding !== 'utf-8') {
+                            return
+                          }
+                          openDiff({
+                            path: activeFile.path,
+                            patch: buildSyntheticDiff(
+                              activeFile.path,
+                              activeFile.bytes,
+                              fresh.bytes
+                            ),
+                            status: 'modified'
+                          })
+                        } catch {
+                          // best-effort — skip if read fails
+                        }
+                      }}
+                    />
+                  ) : null}
+                  <div className="min-h-0 flex-1">
+                    <CodeMirrorView
+                      key={activeFile.path}
+                      path={activeFile.path}
+                      initial={activeFile.bytes}
+                      onChange={(text) => updateActiveBuffer(text)}
+                      onSave={() => void saveActive()}
+                      vimMode={vimMode}
+                      diffPatch={fileDiffs[activeFile.path] ?? null}
+                      onSelectionChange={setHasEditorSelection}
+                    />
+                  </div>
+                </div>
               )
             ) : activeFile ? (
               <div className="flex h-full flex-col items-center justify-center gap-2">
@@ -846,4 +1055,93 @@ function EditorCtxMenu({
       </button>
     </div>
   )
+}
+
+interface ExternalChangeBannerProps {
+  path: string
+  deleted: boolean
+  onReload: () => Promise<void>
+  onKeep: () => void
+  onShowDiff: () => Promise<void>
+}
+
+/**
+ * Sticky conflict banner shown above the editor when an open file
+ * mutates on disk while the in-renderer buffer is dirty. We never show
+ * this for clean buffers — those are reloaded silently with a toast.
+ *
+ * Reload disk gates behind a confirm so the user doesn't lose the
+ * in-memory edits with one stray click. Keep mine just dismisses;
+ * Show diff opens a synthetic diff tab so the user can see WHAT
+ * changed before deciding.
+ */
+function ExternalChangeBanner({
+  path,
+  deleted,
+  onReload,
+  onKeep,
+  onShowDiff
+}: ExternalChangeBannerProps) {
+  return (
+    <div className="flex shrink-0 items-center gap-2 border border-status-attention/40 bg-status-attention/10 px-3 py-2 font-mono text-xs text-status-attention">
+      <AlertTriangle size={14} strokeWidth={1.75} className="shrink-0" />
+      <span className="min-w-0 flex-1 truncate">
+        {deleted
+          ? `${path.split(/[\\/]/).pop()} was removed externally — your unsaved buffer is still here.`
+          : `${path.split(/[\\/]/).pop()} changed on disk while you have unsaved edits.`}
+      </span>
+      {!deleted ? (
+        <button
+          type="button"
+          onClick={() => {
+            const proceed = window.confirm(
+              'Reload from disk and discard your unsaved changes?'
+            )
+            if (!proceed) return
+            void onReload()
+          }}
+          className="rounded-sm border border-status-attention/60 bg-status-attention/20 px-2 py-0.5 text-[11px] font-semibold text-status-attention hover:bg-status-attention/30"
+        >
+          Reload disk
+        </button>
+      ) : null}
+      <button
+        type="button"
+        onClick={onKeep}
+        className="rounded-sm border border-border-soft bg-bg-2 px-2 py-0.5 text-[11px] text-text-2 hover:border-border-mid hover:text-text-1"
+      >
+        Keep mine
+      </button>
+      {!deleted ? (
+        <button
+          type="button"
+          onClick={() => void onShowDiff()}
+          className="rounded-sm border border-border-soft bg-bg-2 px-2 py-0.5 text-[11px] text-text-2 hover:border-border-mid hover:text-text-1"
+        >
+          Show diff
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
+/**
+ * Build a synthetic unified diff between two strings, line-by-line. Not
+ * aligned by an LCS — each side is dumped wholesale with `-` / `+`
+ * markers — but it's enough for the user to eyeball "what's different".
+ * The DiffView component reads unified-diff syntax, and the synthetic
+ * patch round-trips through it cleanly because we only need to render,
+ * not apply.
+ */
+function buildSyntheticDiff(path: string, mine: string, theirs: string): string {
+  const header = `--- ${path} (your buffer)\n+++ ${path} (on disk)\n`
+  if (mine === theirs) {
+    return `${header}@@ identical @@\n`
+  }
+  const myLines = mine.split('\n')
+  const theirLines = theirs.split('\n')
+  const hunkHeader = `@@ -1,${myLines.length} +1,${theirLines.length} @@\n`
+  const minus = myLines.map((l) => `-${l}`).join('\n')
+  const plus = theirLines.map((l) => `+${l}`).join('\n')
+  return `${header}${hunkHeader}${minus}\n${plus}\n`
 }

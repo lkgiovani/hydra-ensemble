@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { FileText, Pin, PinOff, X } from 'lucide-react'
+import { AlertTriangle, FileText, Pin, PinOff, X } from 'lucide-react'
 import { useEditorTabs } from '../../state/editorTabs'
+import { useSessions } from '../../state/sessions'
+import { useEditor } from '../../state/editor'
 
 interface Props {}
 
@@ -16,6 +18,16 @@ interface MenuState {
 function basename(p: string): string {
   const parts = p.split(/[\\/]/).filter(Boolean)
   return parts[parts.length - 1] ?? p
+}
+
+/** Cross-platform "is `path` inside `root`?" check. Normalises trailing
+ *  separators so `/a/b` is correctly considered to live inside `/a/b/`
+ *  and so on. Comparison is case-sensitive on POSIX. */
+function pathStartsWith(path: string, root: string): boolean {
+  if (path === root) return true
+  const sep = path.includes('\\') || root.includes('\\') ? '\\' : '/'
+  const r = root.endsWith(sep) ? root : root + sep
+  return path.startsWith(r)
 }
 
 /**
@@ -35,6 +47,26 @@ export default function EditorTabs(_props: Props = {}) {
   const togglePin = useEditorTabs((s) => s.togglePin)
   const closeOthers = useEditorTabs((s) => s.closeOthers)
   const closeAll = useEditorTabs((s) => s.closeAll)
+
+  // Active session's worktree (or cwd) determines what's "in scope" —
+  // tabs whose path doesn't sit under it get a muted style + warning
+  // glyph so the user notices when they're editing a file from another
+  // checkout. The override root (`.claude/` pin) is honoured too.
+  const activeRoot = useSessions((s) => {
+    const a = s.sessions.find((x) => x.id === s.activeId)
+    return a?.worktreePath ?? a?.cwd ?? null
+  })
+  const overrideRoot = useEditor((s) => s.overrideRoot)
+  const scopeRoot = overrideRoot ?? activeRoot
+
+  const outOfScopeMap = useMemo(() => {
+    const map: Record<string, boolean> = {}
+    if (!scopeRoot) return map
+    for (const t of tabs) {
+      map[t.path] = !pathStartsWith(t.path, scopeRoot)
+    }
+    return map
+  }, [tabs, scopeRoot])
 
   const [menu, setMenu] = useState<MenuState | null>(null)
 
@@ -76,12 +108,17 @@ export default function EditorTabs(_props: Props = {}) {
       {tabs.map((tab) => {
         const active = tab.path === activePath
         const name = basename(tab.path)
+        const outOfScope = !!outOfScopeMap[tab.path]
         return (
           <div
             key={tab.path}
             role="tab"
             aria-selected={active}
-            title={tab.path}
+            title={
+              outOfScope
+                ? `${tab.path}\nFrom another worktree — outside the active session's scope.`
+                : tab.path
+            }
             onMouseDown={(e) => {
               // Middle-click closes the tab (VSCode/browser convention).
               if (e.button === 1) {
@@ -96,7 +133,9 @@ export default function EditorTabs(_props: Props = {}) {
             className={`group relative flex shrink-0 cursor-pointer items-center gap-1.5 border-r border-border-soft px-3 py-1.5 text-xs ${
               active
                 ? 'bg-bg-2 text-text-1'
-                : 'bg-bg-1 text-text-3 hover:text-text-1'
+                : outOfScope
+                  ? 'bg-bg-1 text-text-4 hover:text-text-1'
+                  : 'bg-bg-1 text-text-3 hover:text-text-1'
             }`}
           >
             {/* Accent underline for the active tab. Positioned absolutely so
@@ -105,6 +144,14 @@ export default function EditorTabs(_props: Props = {}) {
               <span
                 aria-hidden
                 className="absolute inset-x-0 bottom-0 h-[2px] bg-accent-500"
+              />
+            ) : null}
+            {outOfScope ? (
+              <AlertTriangle
+                size={10}
+                strokeWidth={2}
+                className="shrink-0 text-status-attention"
+                aria-label="From another worktree"
               />
             ) : null}
             <button

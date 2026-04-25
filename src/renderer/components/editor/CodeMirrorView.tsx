@@ -1,13 +1,26 @@
 import { useEffect, useRef } from 'react'
 import { EditorState, type Extension, Compartment } from '@codemirror/state'
 import { EditorView, keymap, lineNumbers, highlightActiveLine } from '@codemirror/view'
-import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
-import { highlightSelectionMatches, search } from '@codemirror/search'
+import {
+  defaultKeymap,
+  history,
+  historyKeymap,
+  indentWithTab,
+  toggleComment
+} from '@codemirror/commands'
+import {
+  highlightSelectionMatches,
+  search,
+  selectMatches,
+  selectNextOccurrence
+} from '@codemirror/search'
 import { bracketMatching, indentOnInput } from '@codemirror/language'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { vim, Vim } from '@replit/codemirror-vim'
 import { loadLanguageFor } from './languages'
 import { clearDiffPatch, diffExtension, setDiffPatch } from './diff-extension'
+import { useEditor } from '../../state/editor'
+import { useEditorAutoSave } from '../../state/editorSettings'
 
 /**
  * Module-level holder for the currently-mounted editor's view. Consumed
@@ -42,6 +55,52 @@ interface Props {
   /** Fires whenever the user selection changes. Parent uses it to
    *  enable/disable a Copy toolbar button. */
   onSelectionChange?: (hasSelection: boolean) => void
+}
+
+/**
+ * Lightweight glob matcher for the auto-save exclusion list. Supports the
+ * narrow set of patterns the user is realistically going to put there:
+ *   - exact basename match (e.g. `package-lock.json`)
+ *   - extension-only globs (`*.lock`)
+ *   - prefix globs (`.env*`)
+ *   - `<dir>/**` directory matches (e.g. `.git/**`)
+ *
+ * Anything fancier should be filtered by the user upstream — wiring
+ * minimatch in here just to handle the long tail isn't worth the bundle
+ * cost. Comparison is case-sensitive on POSIX, case-insensitive on
+ * Windows (cheap normalisation: lowercase both sides).
+ */
+export function matchesAutoSaveExclude(path: string, patterns: readonly string[]): boolean {
+  if (patterns.length === 0) return false
+  const isWin = path.includes('\\')
+  const sep = isWin ? '\\' : '/'
+  const segs = path.split(/[\\/]/).filter(Boolean)
+  const base = segs[segs.length - 1] ?? path
+  const norm = (s: string): string => (isWin ? s.toLowerCase() : s)
+  for (const raw of patterns) {
+    const pattern = raw.trim()
+    if (!pattern) continue
+    if (pattern.endsWith('/**')) {
+      const dir = pattern.slice(0, -3)
+      const needle = `${sep}${dir}${sep}`
+      if (norm(path).includes(norm(needle))) return true
+      // Match when the directory IS the path's anchor.
+      if (norm(path).startsWith(norm(`${dir}${sep}`))) return true
+      continue
+    }
+    if (pattern.startsWith('*.')) {
+      const ext = pattern.slice(1) // ".lock"
+      if (norm(base).endsWith(norm(ext))) return true
+      continue
+    }
+    if (pattern.endsWith('*')) {
+      const prefix = pattern.slice(0, -1)
+      if (norm(base).startsWith(norm(prefix))) return true
+      continue
+    }
+    if (norm(base) === norm(pattern)) return true
+  }
+  return false
 }
 
 // Wire the `:w` Ex command once per module to save the active file via the
@@ -116,6 +175,42 @@ export default function CodeMirrorView({ path, initial, onChange, onSave, vimMod
             saveRef.current()
             return true
           }
+        },
+        // Toggle line / block comment based on the active language.
+        // Falls through to defaultKeymap if no language is loaded.
+        {
+          key: 'Mod-/',
+          run: toggleComment
+        },
+        // VSCode-style multi-cursor "select next occurrence".
+        {
+          key: 'Mod-d',
+          run: selectNextOccurrence
+        },
+        // VSCode-style "select all occurrences of current match".
+        {
+          key: 'Mod-Shift-l',
+          run: selectMatches
+        },
+        // Goto-line via window.prompt — minimal but functional. Number
+        // input is clamped to the document's line range; bad input is a
+        // no-op so the user just gets dismissed.
+        {
+          key: 'Mod-g',
+          run: (view) => {
+            const raw = window.prompt('Go to line:')
+            if (!raw) return true
+            const target = Number.parseInt(raw, 10)
+            if (!Number.isFinite(target) || target < 1) return true
+            const max = view.state.doc.lines
+            const line = view.state.doc.line(Math.min(target, max))
+            view.dispatch({
+              selection: { anchor: line.from },
+              effects: EditorView.scrollIntoView(line.from, { y: 'center' })
+            })
+            view.focus()
+            return true
+          }
         }
       ]),
       oneDark,
@@ -124,6 +219,22 @@ export default function CodeMirrorView({ path, initial, onChange, onSave, vimMod
       // ships very subtle defaults that are invisible against the diff
       // line backgrounds. VS Code uses a strong amber box around every
       // occurrence + a hotter colour on the "current" match.
+      EditorView.domEventHandlers({
+        blur: () => {
+          // Auto-save on blur. Pulls live config so the user can flip
+          // the toggle while the editor is mounted without a remount.
+          const cfg = useEditorAutoSave.getState()
+          if (!cfg.enabled) return false
+          if (cfg.mode !== 'onBlur' && cfg.mode !== 'both') return false
+          const editor = useEditor.getState()
+          if (!editor.activeFilePath) return false
+          if (!editor.isDirty(editor.activeFilePath)) return false
+          if (editor.externalChange[editor.activeFilePath]) return false
+          if (matchesAutoSaveExclude(editor.activeFilePath, cfg.excludeGlobs)) return false
+          void editor.saveActive()
+          return false
+        }
+      }),
       EditorView.theme({
         '&': { height: '100%' },
         '.cm-scroller': { overflow: 'auto', fontFamily: 'inherit' },
@@ -190,6 +301,11 @@ export default function CodeMirrorView({ path, initial, onChange, onSave, vimMod
   // The `current !== initial` guard keeps our own updateListener round-trip
   // from replaying — when the user types we push the new string back up as
   // `initial`, and without the guard we'd dispatch it right back in.
+  //
+  // Path-keyed: applies on tab switch when the new file is bigger than 0
+  // bytes. External reloads land via the dedicated nonce-driven effect
+  // below so we can preserve the selection/history that this naive
+  // overwrite would clobber.
   useEffect(() => {
     const view = viewRef.current
     if (!view) return
@@ -199,6 +315,30 @@ export default function CodeMirrorView({ path, initial, onChange, onSave, vimMod
       changes: { from: 0, to: view.state.doc.length, insert: initial }
     })
   }, [initial])
+
+  // External reload — fires when the editor store applies fresh bytes
+  // from disk after another process changed the file. We dispatch the
+  // change while preserving the selection so the user's cursor / scroll
+  // / undo history survive the swap. The selection is clamped to the
+  // new doc length so a shorter file doesn't leave the cursor past
+  // EOF (CodeMirror would reject the dispatch otherwise).
+  const reloadNonce = useEditor((s) => s.externalReloadNonce[path] ?? 0)
+  useEffect(() => {
+    if (reloadNonce === 0) return
+    const view = viewRef.current
+    if (!view) return
+    const current = view.state.doc.toString()
+    if (current === initial) return
+    const sel = view.state.selection.main
+    const max = initial.length
+    const anchor = Math.min(sel.anchor, max)
+    const head = Math.min(sel.head, max)
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: initial },
+      selection: { anchor, head },
+      userEvent: 'external.reload'
+    })
+  }, [reloadNonce, initial])
 
   // Toggle vim extension without rebuilding the editor.
   useEffect(() => {

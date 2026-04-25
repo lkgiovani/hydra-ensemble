@@ -11,6 +11,7 @@ import {
 import { constants as fsConstants } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, extname, isAbsolute, join, sep } from 'node:path'
+import { hashString } from './file-watcher'
 import type { DirEntry, FileContent } from '../../shared/types'
 
 /** Maximum file size we will read into memory (5 MB). */
@@ -83,9 +84,13 @@ export class EditorFs {
     return results
   }
 
-  async writeFile(path: string, content: string): Promise<void> {
+  async writeFile(
+    path: string,
+    content: string
+  ): Promise<{ ok: true; hash: string }> {
     const safe = await this.assertSafe(path, { allowMissing: true })
     await writeFile(safe, content, { encoding: 'utf-8' })
+    return { ok: true, hash: hashString(content) }
   }
 
   /**

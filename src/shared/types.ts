@@ -307,28 +307,6 @@ export interface ToolkitRunResult {
 }
 
 // =============================================================================
-// Watchdogs
-// =============================================================================
-
-export interface WatchdogRule {
-  id: string
-  name: string
-  enabled: boolean
-  /** ECMAScript regex source matched against the recent PTY text window */
-  triggerPattern: string
-  action: 'sendInput' | 'notify' | 'kill'
-  payload?: string
-  cooldownMs: number
-}
-
-export interface WatchdogFireEvent {
-  ruleId: string
-  sessionId: string
-  matched: string
-  at: string
-}
-
-// =============================================================================
 // Notifications
 // =============================================================================
 
@@ -361,33 +339,26 @@ export interface FileContent {
   size: number
 }
 
-// =============================================================================
-// GitHub PRs (gh CLI)
-// =============================================================================
-
-export interface PRInfo {
-  number: number
-  title: string
-  state: 'OPEN' | 'CLOSED' | 'MERGED'
-  author: string
-  url: string
-  headRefName: string
-  baseRefName: string
-  isDraft: boolean
-  updatedAt: string
+/** Fired by the main-process FileWatcher whenever a watched file's
+ *  content changes on disk. The hash lets the renderer short-circuit
+ *  loops where its own save triggers the chokidar event. */
+export interface FileChangedEvent {
+  path: string
+  mtime: number
+  size: number
+  hash: string
 }
 
-export interface PRDetail extends PRInfo {
-  body: string
-  diff: string
-  checks: PRCheck[]
+/** Fired when a watched file is unlinked from disk. */
+export interface FileDeletedEvent {
+  path: string
 }
 
-export interface PRCheck {
-  name: string
-  status: 'queued' | 'in_progress' | 'completed' | 'unknown'
-  conclusion?: 'success' | 'failure' | 'cancelled' | 'skipped' | 'neutral'
-  url?: string
+export interface WriteFileResult {
+  ok: boolean
+  /** sha1 of the bytes that were written. Present on success. */
+  hash?: string
+  error?: string
 }
 
 // =============================================================================
@@ -504,18 +475,13 @@ export interface HydraEnsembleApi {
     save: (items: ToolkitItem[]) => Promise<void>
     run: (id: string, cwd: string) => Promise<ToolkitRunResult>
   }
-  watchdog: {
-    list: () => Promise<WatchdogRule[]>
-    save: (rules: WatchdogRule[]) => Promise<void>
-    onFire: (handler: (event: WatchdogFireEvent) => void) => () => void
-  }
   notify: {
     show: (opts: NotifyOptions) => Promise<void>
   }
   editor: {
     readFile: (path: string) => Promise<FileContent>
     listDir: (path: string) => Promise<DirEntry[]>
-    writeFile: (path: string, content: string) => Promise<void>
+    writeFile: (path: string, content: string) => Promise<WriteFileResult>
     findInFiles: (
       cwd: string,
       query: string,
@@ -530,24 +496,14 @@ export interface HydraEnsembleApi {
     claudeDirs: (cwd: string | null) => Promise<{ project: string | null; global: string | null }>
     copyPath: (src: string, destDir: string) => Promise<string>
     deletePath: (path: string) => Promise<void>
-  }
-  gh: {
-    listPRs: (cwd: string) => Promise<GitOpResult<PRInfo[]>>
-    getPR: (cwd: string, number: number) => Promise<GitOpResult<PRDetail>>
-    /** Submit a PR review via `gh pr review`. Body is required when
-     *  `decision` is `request-changes`; optional for `approve` and `comment`. */
-    review: (
-      cwd: string,
-      number: number,
-      decision: 'approve' | 'request-changes' | 'comment',
-      body?: string
-    ) => Promise<GitOpResult>
-    /** Post a top-level comment on the PR via `gh pr comment`. */
-    comment: (cwd: string, number: number, body: string) => Promise<GitOpResult>
-    /** Merge the PR via `gh pr merge`. Defaults to --auto --squash. */
-    merge: (cwd: string, number: number) => Promise<GitOpResult>
-    /** Close the PR via `gh pr close` (without merging). */
-    close: (cwd: string, number: number) => Promise<GitOpResult>
+    /** Subscribe the main-process FileWatcher to `path`. Idempotent —
+     *  ref-counted, so balance with `unwatchFile`. */
+    watchFile: (path: string) => Promise<void>
+    unwatchFile: (path: string) => Promise<void>
+    /** Fires when a watched file mutates on disk. Returns an unsubscribe. */
+    onFileChanged: (handler: (event: FileChangedEvent) => void) => () => void
+    /** Fires when a watched file is unlinked. Returns an unsubscribe. */
+    onFileDeleted: (handler: (event: FileDeletedEvent) => void) => () => void
   }
   quickTerm: {
     toggle: () => Promise<void>

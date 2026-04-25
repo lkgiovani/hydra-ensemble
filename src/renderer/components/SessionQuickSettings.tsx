@@ -1,7 +1,13 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Bot, Eye, RotateCw, Edit3, X, Check, Zap } from 'lucide-react'
+import { Bot, Eye, RotateCw, Edit3, Save, X, Check, Zap } from 'lucide-react'
 import type { SessionViewMode } from '../../shared/types'
 import { useSessions } from '../state/sessions'
+import {
+  AUTO_SAVE_DEBOUNCE_MAX,
+  AUTO_SAVE_DEBOUNCE_MIN,
+  useEditorAutoSave,
+  type AutoSaveMode
+} from '../state/editorSettings'
 
 interface Props {
   sessionId: string
@@ -333,6 +339,13 @@ export default function SessionQuickSettings({
         </div>
       </section>
 
+      {/* Auto-save (editor-wide setting; placed here so it's discoverable
+          alongside the other quick toggles, even though the value is
+          shared across every session). */}
+      <section className="mb-3">
+        <AutoSaveControls />
+      </section>
+
       {/* Actions */}
       <section>
         <div className="mb-1.5 flex items-center gap-1.5">
@@ -403,6 +416,107 @@ function ToggleButton({
     >
       {label}
     </button>
+  )
+}
+
+function AutoSaveControls() {
+  const cfg = useEditorAutoSave((s) => ({
+    enabled: s.enabled,
+    mode: s.mode,
+    debounceMs: s.debounceMs,
+    excludeGlobs: s.excludeGlobs
+  }))
+  const setAutoSave = useEditorAutoSave((s) => s.setAutoSave)
+  // Excluded globs are rendered as a comma-separated string; keep a
+  // local mirror so the user can type freely without each keystroke
+  // round-tripping through `split(',')`.
+  const [excludeText, setExcludeText] = useState(cfg.excludeGlobs.join(', '))
+  // Sync local mirror when the persisted value changes from elsewhere.
+  useEffect(() => {
+    setExcludeText(cfg.excludeGlobs.join(', '))
+  }, [cfg.excludeGlobs])
+
+  const commitExcludes = (raw: string): void => {
+    const next = raw
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+    setAutoSave({ excludeGlobs: next })
+  }
+  return (
+    <>
+      <div className="mb-1.5 flex items-center gap-1.5">
+        <Save size={10} strokeWidth={1.75} className="text-text-3" />
+        <span className="df-label">auto-save</span>
+      </div>
+      <div className="flex flex-col gap-2 rounded-sm border border-border-soft bg-bg-1 p-2">
+        <label className="flex cursor-pointer items-center justify-between gap-2 font-mono text-[11px] text-text-2">
+          <span>enable auto-save</span>
+          <input
+            type="checkbox"
+            checked={cfg.enabled}
+            onChange={(e) => setAutoSave({ enabled: e.target.checked })}
+            className="h-3.5 w-3.5 cursor-pointer accent-accent-500"
+          />
+        </label>
+        {cfg.enabled ? (
+          <>
+            <div className="flex items-center gap-1.5">
+              {(['debounce', 'onBlur', 'both'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setAutoSave({ mode: mode as AutoSaveMode })}
+                  aria-pressed={cfg.mode === mode}
+                  className={`flex-1 rounded-sm border px-2 py-1 font-mono text-[10px] transition ${
+                    cfg.mode === mode
+                      ? 'border-accent-500 bg-accent-500/15 text-accent-300'
+                      : 'border-border-soft bg-bg-2 text-text-3 hover:border-border-mid hover:text-text-1'
+                  }`}
+                >
+                  {mode === 'onBlur' ? 'on blur' : mode}
+                </button>
+              ))}
+            </div>
+            <label className="flex flex-col gap-1 font-mono text-[10px] text-text-3">
+              <div className="flex items-center justify-between">
+                <span>debounce delay</span>
+                <span className="text-text-1">{cfg.debounceMs}ms</span>
+              </div>
+              <input
+                type="range"
+                min={AUTO_SAVE_DEBOUNCE_MIN}
+                max={AUTO_SAVE_DEBOUNCE_MAX}
+                step={100}
+                disabled={cfg.mode === 'onBlur'}
+                value={cfg.debounceMs}
+                onChange={(e) =>
+                  setAutoSave({ debounceMs: Number.parseInt(e.target.value, 10) })
+                }
+                className="cursor-pointer accent-accent-500 disabled:cursor-not-allowed disabled:opacity-40"
+              />
+            </label>
+            <label className="flex flex-col gap-1 font-mono text-[10px] text-text-3">
+              <span>excluded patterns (comma-separated)</span>
+              <input
+                type="text"
+                value={excludeText}
+                onChange={(e) => setExcludeText(e.target.value)}
+                onBlur={(e) => commitExcludes(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    commitExcludes(e.currentTarget.value)
+                    e.currentTarget.blur()
+                  }
+                }}
+                placeholder=".env*, *.lock, .git/**"
+                className="w-full rounded-sm border border-border-soft bg-bg-2 px-2 py-1 font-mono text-[11px] text-text-1 placeholder:text-text-4 focus:border-accent-500 focus:outline-none"
+              />
+            </label>
+          </>
+        ) : null}
+      </div>
+    </>
   )
 }
 

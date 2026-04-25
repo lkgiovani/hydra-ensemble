@@ -4,12 +4,12 @@ import type {
   ClaudeCommandsPayload,
   DirEntry,
   HydraEnsembleApi,
+  FileChangedEvent,
   FileContent,
+  FileDeletedEvent,
   GitOpResult,
   JsonlUpdate,
   NotifyOptions,
-  PRDetail,
-  PRInfo,
   Platform,
   ProjectMeta,
   PtyDataEvent,
@@ -21,8 +21,7 @@ import type {
   ToolkitItem,
   ToolkitRunResult,
   TranscriptPayload,
-  WatchdogFireEvent,
-  WatchdogRule,
+  WriteFileResult,
   Worktree
 } from '../shared/types'
 import type {
@@ -160,11 +159,6 @@ const api: HydraEnsembleApi = {
     run: (id: string, cwd: string): Promise<ToolkitRunResult> =>
       ipcRenderer.invoke('toolkit:run', { id, cwd })
   },
-  watchdog: {
-    list: (): Promise<WatchdogRule[]> => ipcRenderer.invoke('watchdog:list'),
-    save: (rules: WatchdogRule[]) => ipcRenderer.invoke('watchdog:save', rules),
-    onFire: (handler) => on<WatchdogFireEvent>('watchdog:fired', handler)
-  },
   notify: {
     show: (opts: NotifyOptions) => ipcRenderer.invoke('notify:show', opts)
   },
@@ -172,7 +166,7 @@ const api: HydraEnsembleApi = {
     readFile: (path: string): Promise<FileContent> =>
       ipcRenderer.invoke('editor:readFile', path),
     listDir: (path: string): Promise<DirEntry[]> => ipcRenderer.invoke('editor:listDir', path),
-    writeFile: (path: string, content: string) =>
+    writeFile: (path: string, content: string): Promise<WriteFileResult> =>
       ipcRenderer.invoke('editor:writeFile', { path, content }),
     findInFiles: (
       cwd: string,
@@ -190,26 +184,13 @@ const api: HydraEnsembleApi = {
     copyPath: (src: string, destDir: string): Promise<string> =>
       ipcRenderer.invoke('editor:copyPath', { src, destDir }),
     deletePath: (path: string): Promise<void> =>
-      ipcRenderer.invoke('editor:deletePath', path)
-  },
-  gh: {
-    listPRs: (cwd: string): Promise<GitOpResult<PRInfo[]>> =>
-      ipcRenderer.invoke('gh:listPRs', cwd),
-    getPR: (cwd: string, number: number): Promise<GitOpResult<PRDetail>> =>
-      ipcRenderer.invoke('gh:getPR', { cwd, number }),
-    review: (
-      cwd: string,
-      number: number,
-      decision: 'approve' | 'request-changes' | 'comment',
-      body?: string
-    ): Promise<GitOpResult> =>
-      ipcRenderer.invoke('gh:review', { cwd, number, decision, body }),
-    comment: (cwd: string, number: number, body: string): Promise<GitOpResult> =>
-      ipcRenderer.invoke('gh:comment', { cwd, number, body }),
-    merge: (cwd: string, number: number): Promise<GitOpResult> =>
-      ipcRenderer.invoke('gh:merge', { cwd, number }),
-    close: (cwd: string, number: number): Promise<GitOpResult> =>
-      ipcRenderer.invoke('gh:close', { cwd, number })
+      ipcRenderer.invoke('editor:deletePath', path),
+    watchFile: (path: string): Promise<void> =>
+      ipcRenderer.invoke('editor:watchFile', path),
+    unwatchFile: (path: string): Promise<void> =>
+      ipcRenderer.invoke('editor:unwatchFile', path),
+    onFileChanged: (handler) => on<FileChangedEvent>('editor:fileChanged', handler),
+    onFileDeleted: (handler) => on<FileDeletedEvent>('editor:fileDeleted', handler)
   },
   quickTerm: {
     toggle: () => ipcRenderer.invoke('quickTerm:toggle')
