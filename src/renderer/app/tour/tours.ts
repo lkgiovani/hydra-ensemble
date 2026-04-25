@@ -1,6 +1,10 @@
 import { useSessions } from '../../state/sessions'
 import { useSpawnDialog } from '../../state/spawn'
-import { useSlidePanel, useTerminalsPanel } from '../../state/panels'
+import {
+  useSlidePanel,
+  useTerminalsPanel,
+  useToolkitSize
+} from '../../state/panels'
 import { useTour } from './store'
 import type { Tour } from './types'
 
@@ -35,6 +39,16 @@ async function openTerminalsPanel(): Promise<void> {
   const term = useTerminalsPanel.getState()
   if (!term.open) term.toggle()
   await wait(200)
+}
+
+async function openToolkitDrawer(): Promise<void> {
+  // Toolkit defaults to collapsed (just the tab strip). For tour
+  // steps that anchor to elements inside the expanded drawer we need
+  // to slide it up first; the 520ms transition matches the slide-pane
+  // family, hence the wait.
+  const tk = useToolkitSize.getState()
+  if (!tk.expanded) tk.setExpanded(true)
+  await wait(540)
 }
 
 function hasSessions(): boolean {
@@ -244,7 +258,7 @@ export const TOOLKIT_TOUR: Tour = {
   id: 'toolkit',
   label: 'Toolkit — scripted bash actions',
   description:
-    'Pre-configured bash buttons (test / build / lint / anything) that run inside the active session\'s cwd.',
+    'Pre-configured bash buttons (test / build / lint / anything) that run inside the active session\'s cwd. Lives in a slide-up drawer at the bottom of the right column.',
   steps: [
     {
       anchor: null,
@@ -253,18 +267,27 @@ export const TOOLKIT_TOUR: Tour = {
         'You have 5 bash commands you repeat a hundred times a week: `go test ./...`, `npm run lint`, `docker compose up -d`, `pnpm i`, whatever. The toolkit is that library. One click, runs in the active session\'s cwd, streams output into a popover — no agent turn wasted on "please run the tests again".'
     },
     {
+      anchor: null,
+      title: 'Slide-up drawer',
+      body:
+        'The toolkit lives at the bottom of the right column, collapsed by default to just its tab strip (Bashes / Commands / .claude). Click any tab to slide it up to the height you set; click the active tab again to slide it back down. Drag the top edge to resize.',
+      before: () => openToolkitDrawer()
+    },
+    {
       anchor: 'toolkit-grid',
       title: 'The grid',
       body:
         'Every tool is a card. Name, icon, colour, and its shell command. Click to run; the output streams live in a popover anchored to the card. Success / error auto-clear after 2.5s / 6s respectively so the grid doesn\'t become sticky status noise.',
-      placement: 'left'
+      placement: 'left',
+      before: () => openToolkitDrawer()
     },
     {
       anchor: 'toolkit-add',
       title: 'Add / edit',
       body:
         'Plus opens the editor dialog. You pick a name, an icon from the Lucide set, a command, a per-tool accent colour, and optionally a cwd (defaults to the session\'s cwd). Persisted to ~/.config/Hydra, so it follows you across installs.',
-      placement: 'left'
+      placement: 'left',
+      before: () => openToolkitDrawer()
     },
     {
       anchor: null,
