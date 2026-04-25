@@ -55,21 +55,6 @@ export default function Toasts() {
   const dismiss = useToasts((s) => s.dismiss)
   const setActive = useSessions((s) => s.setActive)
 
-  useEffect(() => {
-    // Wire backend-side watchdog and notify events into the toast stream.
-    const offWd = window.api.watchdog.onFire((evt) => {
-      useToasts.getState().push({
-        kind: 'attention',
-        title: `watchdog ${evt.ruleId}`,
-        body: evt.matched ? `matched: ${evt.matched.slice(0, 80)}` : undefined,
-        sessionId: evt.sessionId
-      })
-    })
-    return () => {
-      offWd()
-    }
-  }, [])
-
   // Escape dismisses the top (newest) toast only.
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {

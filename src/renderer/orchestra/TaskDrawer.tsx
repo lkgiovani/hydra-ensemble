@@ -10,8 +10,7 @@
  *   · a destructive Cancel button with confirm-on-in_progress
  *
  * The drawer reads `taskDrawerTaskId` from the store; the `open` prop is
- * driven by callers from that id's presence (matches Hydra's existing
- * PRInspector convention). Esc closes.
+ * driven by callers from that id's presence. Esc closes.
  *
  * See PRD.md §10.F5 (submit task flow), §10.F6 (delegation), §15 (failure
  * states), §16 (safeMode) and PLAN.md §7 (router + Route entries).

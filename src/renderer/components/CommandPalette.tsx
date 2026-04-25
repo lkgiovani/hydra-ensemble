@@ -5,8 +5,6 @@ import {
   X,
   LayoutDashboard,
   Code2,
-  GitPullRequest,
-  Wand2,
   FolderTree,
   Terminal,
   Wrench
@@ -14,11 +12,9 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import { useSessions } from '../state/sessions'
 import { useEditor } from '../state/editor'
-import { useGh } from '../state/gh'
-import { useWatchdog } from '../state/watchdog'
 import { useToolkit } from '../state/toolkit'
 import { useProjects } from '../state/projects'
-import { useSlidePanel, useTerminalsPanel } from '../state/panels'
+import { useSlidePanel } from '../state/panels'
 import AgentAvatar from './AgentAvatar'
 import { ToolkitIcon, guessIconForLabel } from '../lib/toolkit-icons'
 import { fmtShortcut } from '../lib/platform'
@@ -52,9 +48,6 @@ export default function CommandPalette({ open, onClose }: Props) {
   const destroySession = useSessions((s) => s.destroySession)
   const activeId = useSessions((s) => s.activeId)
   const togglePanelFor = useSlidePanel((s) => s.toggle)
-  const openPanel = useSlidePanel((s) => s.open)
-  const toggleTerminals = useTerminalsPanel((s) => s.toggle)
-  const openGh = useGh((s) => s.openPanel)
   const projects = useProjects((s) => s.projects)
   const currentPath = useProjects((s) => s.currentPath)
   const addProject = useProjects((s) => s.addProject)
@@ -193,34 +186,14 @@ export default function CommandPalette({ open, onClose }: Props) {
         onClose()
       })
     )
-    out.push(
-      panel('cmd:watchdogs', 'Watchdogs', `${mod}${shiftSym}W`, Wand2, () => {
-        togglePanelFor('watchdogs')
-        onClose()
-      })
-    )
-    if (cwdContext) {
-      out.push({
-        id: 'cmd:prs',
-        label: 'PR Inspector',
-        shortcut: `${mod}${shiftSym}P`,
-        icon: <GitPullRequest size={14} strokeWidth={1.75} />,
-        group: 'Panels',
-        run: () => {
-          openGh(cwdContext)
-          openPanel('pr')
-          onClose()
-        }
-      })
-    }
 
     // Orchestra — experimental headless agent team mode.
     const orchestraEnabledInPalette = useOrchestra.getState().settings.enabled
     out.push({
       id: 'cmd:orchestra.open',
       label: orchestraEnabledInPalette
-        ? 'Open Orchestra'
-        : 'Enable Orchestra (experimental)',
+        ? 'Open Orchestrador'
+        : 'Enable Orchestrador (experimental)',
       hint: 'manage teams of headless claude agents on a whiteboard',
       shortcut: `${mod}${shiftSym}A`,
       icon: <Network size={14} strokeWidth={1.75} />,
@@ -235,8 +208,8 @@ export default function CommandPalette({ open, onClose }: Props) {
     if (orchestraEnabledInPalette) {
       out.push({
         id: 'cmd:orchestra.disable',
-        label: 'Disable Orchestra',
-        hint: 'hides the Orchestra view until re-enabled',
+        label: 'Disable Orchestrador',
+        hint: 'hides the Orchestrador view until re-enabled',
         icon: <Network size={14} strokeWidth={1.75} />,
         group: 'Panels',
         run: () => {
@@ -286,8 +259,6 @@ export default function CommandPalette({ open, onClose }: Props) {
     addProject,
     setCurrent,
     togglePanelFor,
-    openPanel,
-    openGh,
     runToolkit,
     openToolkitEditor,
     onClose

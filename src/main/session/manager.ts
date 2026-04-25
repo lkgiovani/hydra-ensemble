@@ -26,10 +26,6 @@ export interface SessionManagerDeps {
   pty: PtyManager
   analyzer?: AnalyzerManager
   jsonl?: JsonlManager
-  /** Called for each chunk of PTY data per session — used by the watchdog. */
-  onSessionData?: (sessionId: string, data: string) => void
-  /** Called when a session is destroyed — used by the watchdog to forget it. */
-  onSessionDestroyed?: (sessionId: string) => void
 }
 
 export class SessionManager {
@@ -286,7 +282,6 @@ export class SessionManager {
     const analyzerInstance = this.deps.analyzer?.forSession(ptyId)
     const offData = this.deps.pty.onData(ptyId, (data) => {
       analyzerInstance?.feed(data)
-      this.deps.onSessionData?.(ptyId, data)
     })
     this.unsubscribers.set(ptyId, offData)
 
@@ -342,7 +337,6 @@ export class SessionManager {
     } else {
       this.deps.analyzer?.dispose(meta.ptyId)
     }
-    this.deps.onSessionDestroyed?.(meta.ptyId)
     this.deps.pty.kill(meta.ptyId)
   }
 

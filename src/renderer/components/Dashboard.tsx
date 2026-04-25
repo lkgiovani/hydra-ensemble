@@ -4,7 +4,6 @@ import {
   Clock,
   FileText,
   FolderOpen,
-  GitPullRequest,
   LayoutDashboard,
   Network,
   Plus,
@@ -15,7 +14,6 @@ import { useSpawnDialog } from '../state/spawn'
 import { useProjects } from '../state/projects'
 import { useEditor } from '../state/editor'
 import { useSlidePanel } from '../state/panels'
-import { useGh } from '../state/gh'
 import { useOrchestra } from '../orchestra/state/orchestra'
 import type { ChangedFile, SessionMeta, Worktree } from '../../shared/types'
 import { fmtShortcut } from '../lib/platform'
@@ -140,8 +138,6 @@ export default function Dashboard({ open, onClose, mode = 'inline' }: Props) {
   const setOrchestraSettings = useOrchestra((s) => s.setSettings)
   const setOrchestraOpen = useOrchestra((s) => s.setOverlayOpen)
 
-  const ghPrs = useGh((s) => s.prs)
-
   const [changes, setChanges] = useState<ChangeEntry[]>([])
   // Re-tick so the stats bar refreshes "time active" without a prop change.
   const [, setTickNow] = useState(0)
@@ -230,11 +226,6 @@ export default function Dashboard({ open, onClose, mode = 'inline' }: Props) {
   const recentChanges = useMemo(
     () => changes.slice(0, RECENT_CHANGES_LIMIT),
     [changes]
-  )
-
-  const openPRs = useMemo(
-    () => ghPrs.filter((p) => p.state === 'OPEN').slice(0, 6),
-    [ghPrs]
   )
 
   const todayLabel = useMemo(() => {
@@ -345,7 +336,7 @@ export default function Dashboard({ open, onClose, mode = 'inline' }: Props) {
       />
       <ActionButton
         icon={<Network size={18} strokeWidth={1.75} />}
-        title={orchestraEnabled ? 'Open Orchestra' : 'Enable Orchestra'}
+        title={orchestraEnabled ? 'Open Orchestrador' : 'Enable Orchestrador'}
         subtitle={
           orchestraEnabled
             ? 'headless agent teams'
@@ -464,50 +455,6 @@ export default function Dashboard({ open, onClose, mode = 'inline' }: Props) {
     </Section>
   )
 
-  const openPRsSection = (
-    <Section
-      title="Open PRs"
-      icon={
-        <GitPullRequest size={13} strokeWidth={1.75} className="text-text-4" />
-      }
-      hint={openPRs.length > 0 ? `${openPRs.length}` : undefined}
-    >
-      {openPRs.length === 0 ? (
-        <EmptyRow
-          icon={<GitPullRequest size={18} strokeWidth={1.5} />}
-          label="no cached PRs — open the PR panel to refresh"
-        />
-      ) : (
-        <ul className="flex flex-col divide-y divide-border-soft rounded-sm border border-border-soft bg-bg-2">
-          {openPRs.map((pr) => (
-            <li
-              key={pr.number}
-              className="flex items-center gap-3 px-3 py-2 text-[12px]"
-            >
-              <span className="w-10 shrink-0 font-mono text-[11px] text-text-4">
-                #{pr.number}
-              </span>
-              <span className="min-w-0 flex-1 truncate text-text-1">
-                {pr.title}
-              </span>
-              {pr.isDraft ? (
-                <span className="shrink-0 rounded-sm bg-bg-3 px-1.5 py-0.5 font-mono text-[10px] text-text-3">
-                  draft
-                </span>
-              ) : null}
-              <span className="hidden shrink-0 truncate font-mono text-[10px] text-text-4 md:inline">
-                {pr.headRefName}
-              </span>
-              <span className="shrink-0 font-mono text-[10px] text-text-4">
-                @{pr.author}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Section>
-  )
-
   const footer = (
     <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-border-soft bg-bg-2 px-6 py-3 text-[11px] text-text-4">
       <div className="flex items-center gap-2">
@@ -529,7 +476,6 @@ export default function Dashboard({ open, onClose, mode = 'inline' }: Props) {
           {recentSessionsSection}
           {worktreesSection}
           {recentChangesSection}
-          {openPRsSection}
         </div>
       </div>
       {footer}

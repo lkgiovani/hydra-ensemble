@@ -1,8 +1,8 @@
 /**
- * Generic IPC-cache factory — replaces five hand-rolled per-store
- * implementations (claudeCommands, transcripts, projects, toolkit,
- * watchdog) that each reinvented the same `byKey: Record<K, Entry<T>>`
- * pattern with subtly different loading/error shapes.
+ * Generic IPC-cache factory — replaces hand-rolled per-store
+ * implementations (claudeCommands, transcripts, projects, toolkit)
+ * that each reinvented the same `byKey: Record<K, Entry<T>>` pattern
+ * with subtly different loading/error shapes.
  *
  * The returned object is meant to be embedded in (or composed with) a
  * zustand slice. It is deliberately framework-agnostic:

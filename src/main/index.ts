@@ -8,10 +8,8 @@ import { WorktreeService } from './git/worktree'
 import { CommitAiService } from './git/commit-ai'
 import { ProjectService } from './project/manager'
 import { ToolkitService } from './toolkit/manager'
-import { WatchdogService } from './watchdog/manager'
 import { NotificationService } from './notifications/manager'
 import { EditorFs } from './editor/fs-bridge'
-import { GhService } from './gh/manager'
 import { QuickTermService } from './quickTerm/manager'
 import { registerPtyIpc } from './ipc/pty'
 import { registerClaudeIpc } from './ipc/claude'
@@ -19,10 +17,8 @@ import { registerSessionIpc } from './ipc/session'
 import { registerGitIpc } from './ipc/git'
 import { registerProjectIpc } from './ipc/project'
 import { registerToolkitIpc } from './ipc/toolkit'
-import { registerWatchdogIpc } from './ipc/watchdog'
 import { registerNotifyIpc } from './ipc/notify'
 import { registerEditorIpc } from './ipc/editor'
-import { registerGhIpc } from './ipc/gh'
 import { registerQuickTermIpc } from './ipc/quickTerm'
 import { OrchestraCore } from './orchestra'
 import { registerOrchestraIpc, broadcastOrchestraEvent } from './ipc/orchestra'
@@ -46,8 +42,6 @@ let projectService!: ProjectService
 let toolkitService!: ToolkitService
 let notificationService!: NotificationService
 let editorFs!: EditorFs
-let ghService!: GhService
-let watchdogService!: WatchdogService
 let quickTermService!: QuickTermService
 let orchestraCore!: OrchestraCore
 
@@ -61,24 +55,11 @@ function setupServices(): void {
   toolkitService = new ToolkitService()
   notificationService = new NotificationService()
   editorFs = new EditorFs()
-  ghService = new GhService()
-
-  watchdogService = new WatchdogService({
-    onAction: (a) => {
-      if (a.kind === 'sendInput') {
-        ptyManager.write(a.sessionId, a.data ?? '')
-      } else if (a.kind === 'kill') {
-        void sessionManager.destroy(a.sessionId)
-      }
-    }
-  })
 
   sessionManager = new SessionManager({
     pty: ptyManager,
     analyzer: analyzerManager,
-    jsonl: jsonlManager,
-    onSessionData: (sessionId, data) => watchdogService.feed(sessionId, data),
-    onSessionDestroyed: (sessionId) => watchdogService.forgetSession(sessionId)
+    jsonl: jsonlManager
   })
 
   quickTermService = new QuickTermService(ptyManager)
@@ -160,7 +141,6 @@ function createWindow(): BrowserWindow {
   analyzerManager.attachWindow(win)
   jsonlManager.attachWindow(win)
   projectService.attachWindow(win)
-  watchdogService.attachWindow(win)
   notificationService.attachWindow(win)
 
   // Graceful shutdown on window close. Fires BEFORE the BrowserWindow
@@ -249,10 +229,8 @@ app.whenReady().then(async () => {
   registerGitIpc(worktreeService, commitAiService)
   registerProjectIpc(projectService)
   registerToolkitIpc(toolkitService)
-  registerWatchdogIpc(watchdogService)
   registerNotifyIpc(notificationService)
   registerEditorIpc(editorFs)
-  registerGhIpc(ghService)
   registerQuickTermIpc(quickTermService)
 
   const win = createWindow()
