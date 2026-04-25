@@ -11,15 +11,10 @@ import {
   TerminalSquare,
   UserPlus,
   UserCheck,
-  Bot,
-  Eye,
-  EyeOff,
-  KeyRound,
-  Trash2
+  Bot
 } from 'lucide-react'
 import { useProjects } from '../state/projects'
 import { useSessions } from '../state/sessions'
-import { useKeys } from '../state/keys'
 import {
   PROVIDER_SPECS,
   type Provider,
@@ -28,11 +23,6 @@ import {
 } from '../../shared/types'
 
 const LAST_PROVIDER_KEY = 'hydra.lastProvider'
-
-/** Sentinel values for the saved-keys dropdown. Anything else is a
- *  vault record id. */
-const KEY_PICK_NEW = '__new__'
-const KEY_PICK_NONE = '__none__'
 
 const PROVIDER_ORDER: Provider[] = ['claude', 'codex', 'copilot']
 
@@ -87,29 +77,6 @@ export default function NewSessionDialog({ open, onClose }: Props) {
   const [freshConfig, setFreshConfig] = useState(false)
   const [provider, setProvider] = useState<Provider>(() => readLastProvider())
   const providerSpec = PROVIDER_SPECS[provider]
-  const [useApiKey, setUseApiKey] = useState(false)
-  const [apiKey, setApiKey] = useState('')
-  const [apiKeyName, setApiKeyName] = useState('')
-  const [showApiKey, setShowApiKey] = useState(false)
-  /** id of a saved vault key, or one of the sentinels above. */
-  const [pickedKeyId, setPickedKeyId] = useState<string>(KEY_PICK_NONE)
-  /** When the user picks "(new key)", whether the form should write the
-   *  entered key to the vault on submit. Default true — the user is in
-   *  the vault flow at this point. */
-  const [saveNewKey, setSaveNewKey] = useState(true)
-  /** Reflects safeStorage.isEncryptionAvailable() on the main side. We
-   *  set it after a save throws — the only reliable signal we get from
-   *  the renderer. Defaults to true (optimistic). */
-  const [vaultUnavailable, setVaultUnavailable] = useState(false)
-  const refreshKeys = useKeys((s) => s.refresh)
-  const saveKey = useKeys((s) => s.save)
-  const removeKey = useKeys((s) => s.remove)
-  const savedKeysAll = useKeys((s) => s.byProvider)
-  const savedKeys = useMemo(() => savedKeysAll[provider] ?? [], [savedKeysAll, provider])
-  const pickedKey = useMemo(
-    () => savedKeys.find((k) => k.id === pickedKeyId) ?? null,
-    [savedKeys, pickedKeyId]
-  )
 
   // Sync picked project with current when dialog opens
   useEffect(() => {
@@ -124,39 +91,14 @@ export default function NewSessionDialog({ open, onClose }: Props) {
     setFreshConfig(false)
     const last = readLastProvider()
     setProvider(last)
-    setUseApiKey(false)
-    setApiKey('')
-    setApiKeyName('')
-    setShowApiKey(false)
-    setPickedKeyId(KEY_PICK_NONE)
-    setSaveNewKey(true)
-    setVaultUnavailable(false)
-    // Refresh the vault contents so the dropdown reflects what's
-    // actually saved on disk at this moment. Lazy on purpose — the
-    // store does not auto-load on creation.
-    void refreshKeys().catch(() => {
-      // refresh() failing usually means main hasn't wired the IPC yet
-      // (rare HMR edge). Treat as "no saved keys" — the inline form
-      // still works.
-    })
-  }, [open, currentPath, refreshKeys])
+  }, [open, currentPath])
 
   // When the provider changes, persist the choice so the next open of
-  // the dialog reflects the user's pick. Model selection is no longer
-  // exposed in the dialog — Codex/Copilot pick internally, Claude is
-  // pinned to Opus 4.7 via PROVIDER_SPECS.
+  // the dialog reflects the user's pick. Each CLI handles its own auth
+  // on first run (Claude OAuth, Codex prompts for OPENAI_API_KEY,
+  // Copilot inherits gh auth) — Hydra doesn't replicate that flow.
   useEffect(() => {
     persistLastProvider(provider)
-    // The api-key toggle only applies to providers that support keys —
-    // dropping back to a keyless provider (copilot) clears it implicitly.
-    if (!PROVIDER_SPECS[provider].apiKeyEnv) {
-      setUseApiKey(false)
-      setApiKey('')
-    }
-    // Saved keys are scoped per provider, so a switch always resets the
-    // picker. The dropdown will be re-populated by the byProvider memo.
-    setPickedKeyId(KEY_PICK_NONE)
-    setSaveNewKey(true)
   }, [provider])
 
   // Refresh worktrees when project changes
@@ -190,55 +132,14 @@ export default function NewSessionDialog({ open, onClose }: Props) {
       // Resolve the cwd: worktree path overrides project path.
       const cwd = pickedWorktree?.path ?? pickedProject
       const branch = pickedWorktree?.branch
-      const trimmedKey = apiKey.trim()
-      const trimmedKeyName = apiKeyName.trim()
-      const keyEnv = providerSpec.apiKeyEnv
-
-      // Resolve the API-key payload for createSession.
-      // Three branches: picked saved key → apiKeyId; new + save → vault
-      // write then apiKeyId; new + don't save (or vault unavailable) →
-      // ad-hoc apiKey. Plaintext in `apiKey` is never persisted by main.
-      let apiKeyIdToSend: string | undefined
-      let apiKeyToSend: string | undefined
-      if (useApiKey && keyEnv) {
-        if (pickedKey) {
-          apiKeyIdToSend = pickedKey.id
-        } else if (trimmedKey) {
-          if (saveNewKey && trimmedKeyName && !vaultUnavailable) {
-            try {
-              const id = await saveKey({
-                name: trimmedKeyName,
-                provider,
-                apiKeyEnv: keyEnv,
-                value: trimmedKey
-              })
-              apiKeyIdToSend = id
-            } catch {
-              // safeStorage unavailable / write failed — degrade to
-              // ad-hoc plaintext for THIS session and surface a warning
-              // so the user knows nothing got saved.
-              setVaultUnavailable(true)
-              apiKeyToSend = trimmedKey
-            }
-          } else {
-            apiKeyToSend = trimmedKey
-          }
-        }
-      }
-      const usingKey = apiKeyIdToSend !== undefined || apiKeyToSend !== undefined
       await createSession({
         cwd,
         worktreePath: pickedWorktree && !pickedWorktree.isMain ? pickedWorktree.path : undefined,
         branch,
         name: name.trim() || undefined,
         viewMode,
-        // When the user supplies an API key we IGNORE the global/fresh
-        // toggle — the key supersedes account auth, and isolating a
-        // fresh config dir for an env-only auth would just be churn.
-        freshConfig: usingKey ? false : freshConfig,
-        provider,
-        apiKey: apiKeyToSend,
-        apiKeyId: apiKeyIdToSend
+        freshConfig,
+        provider
       })
       onClose()
     } finally {
@@ -488,60 +389,6 @@ export default function NewSessionDialog({ open, onClose }: Props) {
             />
           </div>
 
-          {/* View mode selector — CLI (raw xterm) vs visual chat.
-              Lives in the LEFT column with the rest of the per-session
-              presentation knobs. */}
-          <div>
-            <label className="df-label mb-1.5 block">view</label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setViewMode('cli')}
-                className={`flex items-start gap-2 rounded-sm border px-2.5 py-2 text-left transition ${
-                  viewMode === 'cli'
-                    ? 'border-accent-500 bg-accent-500/10'
-                    : 'border-border-soft bg-bg-1 hover:border-border-mid hover:bg-bg-3'
-                }`}
-              >
-                <TerminalSquare
-                  size={14}
-                  strokeWidth={1.75}
-                  className={viewMode === 'cli' ? 'mt-0.5 text-accent-400' : 'mt-0.5 text-text-3'}
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs font-semibold text-text-1">cli</div>
-                  <div className="mt-0.5 text-[11px] leading-snug text-text-3">
-                    raw xterm — every key goes straight to claude, slash commands, shortcuts, all of it.
-                  </div>
-                </div>
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('visual')}
-                className={`flex items-start gap-2 rounded-sm border px-2.5 py-2 text-left transition ${
-                  viewMode === 'visual'
-                    ? 'border-accent-500 bg-accent-500/10'
-                    : 'border-border-soft bg-bg-1 hover:border-border-mid hover:bg-bg-3'
-                }`}
-              >
-                <MessageSquare
-                  size={14}
-                  strokeWidth={1.75}
-                  className={viewMode === 'visual' ? 'mt-0.5 text-accent-400' : 'mt-0.5 text-text-3'}
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs font-semibold text-text-1">visual</div>
-                  <div className="mt-0.5 text-[11px] leading-snug text-text-3">
-                    rendered chat — markdown, tool calls, clickable file refs, usage inline.
-                  </div>
-                </div>
-              </button>
-            </div>
-            <div className="mt-1.5 font-mono text-[10px] text-text-4">
-              you can toggle this per session at any time from the pane header.
-            </div>
-          </div>
-
           </div>
 
           {/* RIGHT COLUMN — agent config */}
@@ -590,210 +437,17 @@ export default function NewSessionDialog({ open, onClose }: Props) {
             </div>
           </div>
 
-          {/* API key (chavinha) — only providers with an apiKeyEnv.
-              The key block has three sub-flows when toggled on:
-                1. saved keys exist -> show dropdown above the form so the
-                   user can pick a previously-saved entry by name. Picking
-                   one collapses the inline name+value inputs and renders a
-                   small chip with a remove-from-vault button.
-                2. saved keys exist + user picks "(new key)" -> show the
-                   inline name+value inputs along with a "save this key
-                   for reuse" toggle (defaults ON since the user is in the
-                   vault flow already).
-                3. no saved keys yet -> render the inline form directly,
-                   no dropdown needed. The save toggle still controls
-                   whether the entered key is persisted to the vault. */}
-          {providerSpec.apiKeyEnv ? (
-            <div>
-              {/* Header row — title left, toggle right. `min-w-0` +
-                  `shrink-0` + `whitespace-nowrap` on the toggle pieces
-                  so the row can't wrap and shift when the user clicks
-                  it. Checkbox sits BEFORE the text (consistent reading
-                  direction with the other check rows) so the visible
-                  hit-target doesn't move when toggled. */}
-              <div className="mb-1.5 flex min-w-0 items-center justify-between gap-2">
-                <span className="df-label shrink-0">api key</span>
-                <label className="flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap text-[11px] text-text-2">
-                  <input
-                    type="checkbox"
-                    checked={useApiKey}
-                    onChange={(e) => setUseApiKey(e.target.checked)}
-                    className="h-3 w-3 shrink-0 accent-accent-500"
-                  />
-                  <span className="text-text-4">use for this session</span>
-                </label>
-              </div>
-              {/* Form is ALWAYS rendered so the user sees what they'll
-                  fill in. When the toggle above is OFF, every control
-                  is disabled and the whole block dims — labels stay
-                  visible but inert until the toggle activates them. */}
-              <div className={`space-y-2 ${useApiKey ? '' : 'opacity-50'}`}>
-                {useApiKey && vaultUnavailable ? (
-                  <div className="rounded-sm border border-yellow-500/40 bg-yellow-500/10 px-2.5 py-1.5 text-[11px] leading-snug text-yellow-200">
-                    vault unavailable on this OS — keys can&apos;t be saved.
-                    The key you enter below will be used for this session
-                    only and never written to disk.
-                  </div>
-                ) : null}
-
-                {/* Saved-keys picker — only when entries exist for the
-                    current provider. */}
-                {savedKeys.length > 0 ? (
-                  <div>
-                    <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.18em] text-text-3">
-                      saved keys
-                    </label>
-                    <select
-                      value={pickedKeyId}
-                      disabled={!useApiKey}
-                      onChange={(e) => {
-                        const next = e.target.value
-                        setPickedKeyId(next)
-                        if (next !== KEY_PICK_NEW && next !== KEY_PICK_NONE) {
-                          setApiKey('')
-                          setApiKeyName('')
-                        }
-                      }}
-                      className="w-full rounded-sm border border-border-mid bg-bg-1 px-2.5 py-1.5 font-mono text-sm text-text-1 focus:border-accent-500 focus:outline-none disabled:cursor-not-allowed"
-                    >
-                      <option value={KEY_PICK_NONE}>(none — enter below)</option>
-                      <option value={KEY_PICK_NEW}>(new key)</option>
-                      {savedKeys.map((k) => (
-                        <option key={k.id} value={k.id}>
-                          {k.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ) : null}
-
-                {pickedKey && useApiKey ? (
-                  /* Saved key picked — collapse to a chip + delete. */
-                  <div className="flex items-center justify-between gap-2 rounded-sm border border-accent-500/40 bg-accent-500/10 px-2.5 py-1.5">
-                    <span className="flex items-center gap-1.5 text-[11px] text-text-1">
-                      <KeyRound size={12} strokeWidth={1.75} className="text-accent-400" />
-                      <span className="font-mono">saved · {pickedKey.name}</span>
-                      <span className="text-text-4">— exported as {pickedKey.apiKeyEnv}</span>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        try {
-                          await removeKey(pickedKey.id)
-                        } finally {
-                          setPickedKeyId(KEY_PICK_NONE)
-                        }
-                      }}
-                      className="rounded-sm p-1 text-text-4 hover:bg-bg-3 hover:text-text-1"
-                      title="remove from vault"
-                      aria-label="remove from vault"
-                    >
-                      <Trash2 size={12} strokeWidth={1.75} />
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    {/* NAME — friendly handle, used when saved to vault. */}
-                    <div>
-                      <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.18em] text-text-3">
-                        name
-                      </label>
-                      <input
-                        type="text"
-                        value={apiKeyName}
-                        disabled={!useApiKey}
-                        onChange={(e) => setApiKeyName(e.target.value)}
-                        placeholder="e.g. personal-openai"
-                        autoComplete="off"
-                        spellCheck={false}
-                        className="w-full rounded-sm border border-border-mid bg-bg-1 px-2.5 py-1.5 font-mono text-sm text-text-1 placeholder:text-text-4 focus:border-accent-500 focus:outline-none disabled:cursor-not-allowed"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.18em] text-text-3">
-                        key value
-                      </label>
-                      <div className="relative">
-                        <KeyRound
-                          size={12}
-                          strokeWidth={1.75}
-                          className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-text-4"
-                        />
-                        <input
-                          type={showApiKey ? 'text' : 'password'}
-                          value={apiKey}
-                          disabled={!useApiKey}
-                          onChange={(e) => setApiKey(e.target.value)}
-                          placeholder={`exported as ${providerSpec.apiKeyEnv}`}
-                          autoComplete="off"
-                          spellCheck={false}
-                          className="w-full rounded-sm border border-border-mid bg-bg-1 pl-7 pr-9 py-1.5 font-mono text-sm text-text-1 placeholder:text-text-4 focus:border-accent-500 focus:outline-none disabled:cursor-not-allowed"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowApiKey((v) => !v)}
-                          disabled={!useApiKey}
-                          className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-sm p-1 text-text-4 hover:bg-bg-3 hover:text-text-1 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                          title={showApiKey ? 'hide key' : 'show key'}
-                          aria-label={showApiKey ? 'hide key' : 'show key'}
-                        >
-                          {showApiKey ? (
-                            <EyeOff size={12} strokeWidth={1.75} />
-                          ) : (
-                            <Eye size={12} strokeWidth={1.75} />
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                    <label
-                      className={`flex items-center gap-1.5 text-[11px] text-text-2 ${
-                        useApiKey && !vaultUnavailable
-                          ? 'cursor-pointer'
-                          : 'cursor-not-allowed'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={saveNewKey && useApiKey && !vaultUnavailable}
-                        onChange={(e) => setSaveNewKey(e.target.checked)}
-                        disabled={!useApiKey || vaultUnavailable}
-                        className="h-3 w-3 accent-accent-500 disabled:cursor-not-allowed disabled:opacity-50"
-                      />
-                      <span>save this key for reuse</span>
-                      <span className="text-text-4">
-                        — encrypted with the OS key store, plaintext never leaves your machine
-                      </span>
-                    </label>
-                  </>
-                )}
-                {useApiKey ? (
-                  <p className="text-[10px] leading-snug text-text-4">
-                    Key supersedes the agent&apos;s saved login — the
-                    Account selector below is disabled for this session.
-                  </p>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
 
           {/* Account — share the host login (default) or run this
               session under an isolated config dir so the agent CLI
               prompts for a brand-new login. */}
-          <div className={useApiKey ? 'opacity-50' : ''}>
-            <label className="df-label mb-1.5 flex items-center justify-between">
-              <span>account</span>
-              {useApiKey ? (
-                <span className="text-[10px] normal-case tracking-normal text-text-4">
-                  disabled — api key supersedes saved login
-                </span>
-              ) : null}
-            </label>
+          <div>
+            <label className="df-label mb-1.5 block">account</label>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                disabled={useApiKey}
                 onClick={() => setFreshConfig(false)}
-                className={`flex items-start gap-2 rounded-sm border px-2.5 py-2 text-left transition disabled:cursor-not-allowed ${
+                className={`flex items-start gap-2 rounded-sm border px-2.5 py-2 text-left transition ${
                   !freshConfig
                     ? 'border-accent-500 bg-accent-500/10'
                     : 'border-border-soft bg-bg-1 hover:border-border-mid hover:bg-bg-3'
@@ -813,9 +467,8 @@ export default function NewSessionDialog({ open, onClose }: Props) {
               </button>
               <button
                 type="button"
-                disabled={useApiKey}
                 onClick={() => setFreshConfig(true)}
-                className={`flex items-start gap-2 rounded-sm border px-2.5 py-2 text-left transition disabled:cursor-not-allowed ${
+                className={`flex items-start gap-2 rounded-sm border px-2.5 py-2 text-left transition ${
                   freshConfig
                     ? 'border-accent-500 bg-accent-500/10'
                     : 'border-border-soft bg-bg-1 hover:border-border-mid hover:bg-bg-3'
@@ -835,6 +488,60 @@ export default function NewSessionDialog({ open, onClose }: Props) {
                   </div>
                 </div>
               </button>
+            </div>
+          </div>
+
+          {/* View mode selector — CLI (raw xterm) vs visual chat. Sits
+              at the bottom of the RIGHT column as the per-session
+              presentation knob. */}
+          <div>
+            <label className="df-label mb-1.5 block">view</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setViewMode('cli')}
+                className={`flex items-start gap-2 rounded-sm border px-2.5 py-2 text-left transition ${
+                  viewMode === 'cli'
+                    ? 'border-accent-500 bg-accent-500/10'
+                    : 'border-border-soft bg-bg-1 hover:border-border-mid hover:bg-bg-3'
+                }`}
+              >
+                <TerminalSquare
+                  size={14}
+                  strokeWidth={1.75}
+                  className={viewMode === 'cli' ? 'mt-0.5 text-accent-400' : 'mt-0.5 text-text-3'}
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-semibold text-text-1">cli</div>
+                  <div className="mt-0.5 text-[11px] leading-snug text-text-3">
+                    raw xterm — every key goes straight to the agent, slash commands, shortcuts, all of it.
+                  </div>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('visual')}
+                className={`flex items-start gap-2 rounded-sm border px-2.5 py-2 text-left transition ${
+                  viewMode === 'visual'
+                    ? 'border-accent-500 bg-accent-500/10'
+                    : 'border-border-soft bg-bg-1 hover:border-border-mid hover:bg-bg-3'
+                }`}
+              >
+                <MessageSquare
+                  size={14}
+                  strokeWidth={1.75}
+                  className={viewMode === 'visual' ? 'mt-0.5 text-accent-400' : 'mt-0.5 text-text-3'}
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-semibold text-text-1">visual</div>
+                  <div className="mt-0.5 text-[11px] leading-snug text-text-3">
+                    rendered chat — markdown, tool calls, clickable file refs, usage inline.
+                  </div>
+                </div>
+              </button>
+            </div>
+            <div className="mt-1.5 font-mono text-[10px] text-text-4">
+              you can toggle this per session at any time from the pane header.
             </div>
           </div>
           </div>
