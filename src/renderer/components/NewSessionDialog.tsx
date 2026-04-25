@@ -397,7 +397,7 @@ export default function NewSessionDialog({ open, onClose }: Props) {
               Copilot manage their own model selection inside the TUI;
               Claude is pinned to Opus 4.7 via PROVIDER_SPECS. */}
           <div>
-            <label className="df-label mb-1.5 block">agent</label>
+            <label className="df-label mb-1.5 block">provider</label>
             <div className="grid grid-cols-3 gap-2">
               {PROVIDER_ORDER.map((p) => {
                 const spec = PROVIDER_SPECS[p]
@@ -409,30 +409,34 @@ export default function NewSessionDialog({ open, onClose }: Props) {
                     key={p}
                     type="button"
                     onClick={() => setProvider(p)}
-                    className={`flex flex-col items-start gap-1 rounded-sm border px-2.5 py-2 text-left transition ${
+                    className={`flex min-w-0 flex-col items-start gap-1 rounded-sm border px-2.5 py-2 text-left transition ${
                       sel
                         ? 'border-accent-500 bg-accent-500/10'
                         : 'border-border-soft bg-bg-1 hover:border-border-mid hover:bg-bg-3'
                     }`}
+                    title={spec.label}
                   >
-                    <span className="flex items-center gap-1.5">
+                    <span className="flex w-full min-w-0 items-center gap-1.5">
                       <Icon
                         size={12}
                         strokeWidth={1.75}
-                        className={sel ? 'text-accent-400' : 'text-text-3'}
+                        className={`shrink-0 ${sel ? 'text-accent-400' : 'text-text-3'}`}
                       />
-                      <span className="text-xs font-semibold text-text-1">
+                      <span className="min-w-0 truncate text-xs font-semibold text-text-1">
                         {spec.label}
                       </span>
                     </span>
-                    <span className="font-mono text-[10px] text-text-4">
+                    <span className="min-w-0 truncate font-mono text-[10px] text-text-4">
                       {spec.binary}
                     </span>
                   </button>
                 )
               })}
             </div>
-            <div className="mt-1.5 text-[11px] leading-snug text-text-3">
+            {/* authHint length varies wildly between providers — reserving
+                a fixed min-height keeps the rest of the dialog from
+                jumping when the user toggles between them. */}
+            <div className="mt-1.5 min-h-[3rem] text-[11px] leading-snug text-text-3">
               {providerSpec.authHint}
             </div>
           </div>
