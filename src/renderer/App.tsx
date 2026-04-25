@@ -163,11 +163,16 @@ export default function App() {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-bg-0 text-text-1">
-      {/* Project drawer (collapsible) */}
+      {/* Project drawer (collapsible). Same 520ms / Material easing as
+          Ctrl+Q and Ctrl+E so all three panel toggles read as one
+          motion family. */}
       <div
-        className={`shrink-0 overflow-hidden border-r border-border-soft transition-[width] duration-200 ${
+        className={`shrink-0 overflow-hidden border-r border-border-soft ${
           drawerOpen ? 'w-64' : 'w-0'
         }`}
+        style={{
+          transition: 'width 520ms cubic-bezier(0.4, 0, 0.2, 1)'
+        }}
       >
         <Sidebar />
       </div>

@@ -31,6 +31,13 @@ export default function SessionPane({ session, visible }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
+  // Last (cols, rows) we shipped to the PTY. Both the ResizeObserver
+  // and the visibility-change effect dedup against these — Claude
+  // redraws its TUI on every SIGWINCH, so without dedup, every panel
+  // toggle that ends back at the same size still re-renders the
+  // welcome banner and pollutes the buffer.
+  const lastSentColsRef = useRef(-1)
+  const lastSentRowsRef = useRef(-1)
   const [exited, setExited] = useState<ExitInfo | null>(null)
   const [restarting, setRestarting] = useState(false)
   const [starting, setStarting] = useState(true)
@@ -172,15 +179,19 @@ export default function SessionPane({ session, visible }: Props) {
     })
 
     // Resize observer: debounced PAST the longest panel-toggle animation
-    // (editor/dashboard slide-pane is 520ms, Ctrl+Q sessions is 280ms,
-    // Ctrl+T drawer is 200ms) so the ResizeObserver doesn't fire
+    // (editor/dashboard slide-pane and Ctrl+Q sessions are 520ms,
+    // Ctrl+T drawer is 520ms) so the ResizeObserver doesn't fire
     // mid-animation and trigger an xterm refit that visually "flicks"
-    // the terminal as it adjusts to intermediate sizes. With a 560ms
-    // debounce, repeated mid-animation ticks just reset the timer; the
-    // actual fit + PTY resize only happens once after the motion
-    // settles. Clamped so we never tell the PTY "cols=1" when the
-    // container is momentarily collapsed (which would make claude wrap
-    // one character per line).
+    // the terminal as it adjusts to intermediate sizes.
+    //
+    // Crucially: only ship the PTY resize when cols/rows ACTUALLY
+    // changed. Claude Code redraws its TUI on every SIGWINCH — without
+    // this dedup, opening + closing a panel back to the same width
+    // still produces a SIGWINCH at settle time, Claude redraws the
+    // welcome banner, and the buffer ends up with N stacked copies of
+    // the welcome screen. The xterm-internal `fit.fit()` is a
+    // local-only resize and is always cheap to call; the PTY round
+    // trip is what we gate.
     let resizeTimer: ReturnType<typeof setTimeout> | null = null
     const ro = new ResizeObserver(() => {
       const w = container.clientWidth
@@ -192,6 +203,14 @@ export default function SessionPane({ session, visible }: Props) {
         fitSafely()
         const cols = Math.max(20, term.cols)
         const rows = Math.max(5, term.rows)
+        if (
+          cols === lastSentColsRef.current &&
+          rows === lastSentRowsRef.current
+        ) {
+          return
+        }
+        lastSentColsRef.current = cols
+        lastSentRowsRef.current = rows
         void window.api.pty.resize(ptyId, cols, rows)
       }, 560)
     })
@@ -230,7 +249,16 @@ export default function SessionPane({ session, visible }: Props) {
         fit.fit()
         const cols = Math.max(20, term.cols)
         const rows = Math.max(5, term.rows)
-        void window.api.pty.resize(session.ptyId, cols, rows)
+        // Same dedup as the ResizeObserver — re-showing a pane at the
+        // same size shouldn't trigger another SIGWINCH redraw.
+        if (
+          cols !== lastSentColsRef.current ||
+          rows !== lastSentRowsRef.current
+        ) {
+          lastSentColsRef.current = cols
+          lastSentRowsRef.current = rows
+          void window.api.pty.resize(session.ptyId, cols, rows)
+        }
         term.focus()
       } catch {
         // noop
