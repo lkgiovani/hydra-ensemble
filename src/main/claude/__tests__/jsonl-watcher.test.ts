@@ -205,7 +205,11 @@ describe('JsonlWatcher integration', () => {
     try {
       const first = await waitFor(() => updates.at(-1))
       expect(first.sessionId).toBe('sess-1')
-      expect(first.model).toBe('sonnet')
+      // The watcher now preserves the full raw model id so the renderer
+      // can surface version + variant info (formatModel handles the
+      // friendly display); pricing still works because shortModelName()
+      // is called on the fly at the per-line cost-lookup site.
+      expect(first.model).toBe('claude-sonnet-4-20250514')
       expect(first.tokensIn).toBe(1000)
       expect(first.tokensOut).toBe(500)
       // sonnet: input 3/M, output 15/M => 1000*3/1e6 + 500*15/1e6 = 0.003 + 0.0075
@@ -233,7 +237,7 @@ describe('JsonlWatcher integration', () => {
       const second = await waitFor(() =>
         updates.length > before ? updates.at(-1) : undefined
       )
-      expect(second.model).toBe('opus')
+      expect(second.model).toBe('claude-opus-4-6-20250514')
       // Tokens accumulate: 1000 + 100 + 1000 + 500 = 2600 in; 500 + 200 = 700 out
       expect(second.tokensIn).toBe(2600)
       expect(second.tokensOut).toBe(700)
@@ -275,7 +279,7 @@ describe('JsonlWatcher integration', () => {
     try {
       const update = await waitFor(() => updates.at(-1))
       expect(updates).toHaveLength(1) // only the assistant line triggered an emit
-      expect(update.model).toBe('haiku')
+      expect(update.model).toBe('claude-haiku-3-5-20250514')
       expect(update.tokensIn).toBe(10)
       expect(update.tokensOut).toBe(20)
       // Haiku: input 0.25/M, output 1.25/M => 10*0.25/1e6 + 20*1.25/1e6
@@ -319,8 +323,8 @@ describe('JsonlWatcher integration', () => {
       )
 
       const update = await waitFor(() => updates.at(-1), 6000)
+      expect(update.model).toBe('claude-sonnet-4')
       expect(update.tokensOut).toBe(1)
-      expect(update.model).toBe('sonnet')
     } finally {
       watcher.stop()
     }
