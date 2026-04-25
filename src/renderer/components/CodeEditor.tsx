@@ -492,7 +492,12 @@ export default function CodeEditor({ open, onClose, mode = 'inline' }: Props) {
     setActive
   ])
 
-  if (!open) return null
+  // Overlay mode is gated on `open` (no portal when closed). Inline
+  // mode renders body unconditionally so the parent slide-pane can
+  // animate its width 0 → panelWidth → 0 with the body still painted —
+  // unmounting on `!open` would yank the content out mid-transition
+  // and the user would see the editor "vanish" instead of slide.
+  if (!open && mode === 'overlay') return null
   const activeFile = openFiles.find((f) => f.path === activeFilePath) ?? null
   const isMarkdown = !!activeFile && /\.(md|markdown|mdx)$/i.test(activeFile.path)
   const showPreview = isMarkdown && previewMd

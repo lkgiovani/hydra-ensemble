@@ -237,7 +237,10 @@ export default function Dashboard({ open, onClose, mode = 'inline' }: Props) {
     })
   }, [])
 
-  if (!open) return null
+  // Same trick as CodeEditor: only the overlay portal needs to gate on
+  // `open`. Inline mode renders body always so the slide-pane parent
+  // can animate width without unmounting our content mid-transition.
+  if (!open && mode === 'overlay') return null
 
   const handleFocus = (id: string): void => {
     setActive(id)

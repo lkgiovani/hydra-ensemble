@@ -349,7 +349,7 @@ export default function App() {
               to take over the empty area. The resize handle is now an
               inner left-edge strip on the pane itself. */}
           <div
-            className={`absolute right-0 top-0 bottom-0 z-30 flex flex-col overflow-hidden border-l shadow-pop ${
+            className={`absolute right-0 top-0 bottom-0 z-30 flex flex-col overflow-hidden border-l bg-bg-2 shadow-pop ${
               activePanel ? 'border-border-mid' : 'border-transparent pointer-events-none'
             }`}
             style={{
