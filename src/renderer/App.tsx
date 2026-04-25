@@ -518,11 +518,15 @@ export default function App() {
           <div
             className={`relative flex shrink-0 flex-col overflow-hidden border-l ${
               rightPanelHidden ? 'border-transparent' : 'border-transparent'
-            } transition-[width,opacity] duration-[280ms]`}
+            } bg-bg-2`}
             style={{
               width: rightPanelHidden ? 0 : rightColumnWidth,
-              opacity: rightPanelHidden ? 0 : 1,
-              transitionTimingFunction: 'cubic-bezier(0.32, 0.72, 0, 1)'
+              // Same 520ms / Material easing as the slide-pane so the
+              // three panel toggles (Ctrl+T drawer, Ctrl+Q sessions,
+              // Ctrl+E editor) all read as one motion family. Opacity
+              // dropped — width-clip via overflow-hidden hides the
+              // contents naturally, no need to fade them out early.
+              transition: 'width 520ms cubic-bezier(0.4, 0, 0.2, 1)'
             }}
             aria-hidden={rightPanelHidden}
           >
