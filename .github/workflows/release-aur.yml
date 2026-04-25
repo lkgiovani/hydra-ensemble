@@ -101,13 +101,32 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > ~/.ssh/aur
           chmod 600 ~/.ssh/aur
-          ssh-keyscan -H aur.archlinux.org >> ~/.ssh/known_hosts 2>/dev/null
-          cat > ~/.ssh/config <<EOF
-          Host aur.archlinux.org
-            IdentityFile ~/.ssh/aur
-            IdentitiesOnly yes
-            User aur
-          EOF
+
+          # ssh-keyscan can flake on transient DNS / connect timeouts.
+          # Retry up to 3× with backoff, with a 10s per-host timeout.
+          # If all attempts fail, drop to StrictHostKeyChecking=accept-new
+          # in the ssh config so the FIRST git fetch picks up + persists
+          # the host key on its own; subsequent runs verify against it.
+          KEYSCAN_OK=0
+          for attempt in 1 2 3; do
+            if ssh-keyscan -T 10 -t ed25519,rsa aur.archlinux.org \
+              >> ~/.ssh/known_hosts 2>/dev/null; then
+              KEYSCAN_OK=1
+              break
+            fi
+            sleep $((attempt * 2))
+          done
+
+          {
+            echo "Host aur.archlinux.org"
+            echo "  IdentityFile ~/.ssh/aur"
+            echo "  IdentitiesOnly yes"
+            echo "  User aur"
+            if [ "$KEYSCAN_OK" -eq 0 ]; then
+              echo "  StrictHostKeyChecking accept-new"
+              echo "  UserKnownHostsFile ~/.ssh/known_hosts"
+            fi
+          } > ~/.ssh/config
           chmod 600 ~/.ssh/config
 
       - name: Clone AUR repo
