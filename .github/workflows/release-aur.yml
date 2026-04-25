@@ -131,7 +131,25 @@ jobs:
 
       - name: Clone AUR repo
         run: |
-          git clone ssh://aur@aur.archlinux.org/hydra-ensemble-bin.git aur-repo
+          set -euo pipefail
+          # AUR's SSH endpoint rate-limits connections per IP. GitHub
+          # runners share IPs and we sometimes hit it after the keyscan
+          # opened a connection earlier in the job. Retry up to 5× with
+          # exponential backoff so a transient `kex_exchange_identification:
+          # Connection closed` doesn't fail the whole release.
+          for attempt in 1 2 3 4 5; do
+            if git clone ssh://aur@aur.archlinux.org/hydra-ensemble-bin.git aur-repo; then
+              break
+            fi
+            if [ "$attempt" -eq 5 ]; then
+              echo "::error::failed to clone AUR repo after 5 attempts"
+              exit 1
+            fi
+            DELAY=$((attempt * 15))
+            echo "clone attempt $attempt failed; sleeping ${DELAY}s before retry"
+            sleep "$DELAY"
+            rm -rf aur-repo
+          done
           cd aur-repo
           git config user.email "birisesports@gmail.com"
           git config user.name "Hydra Release Bot"
