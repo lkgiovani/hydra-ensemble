@@ -121,6 +121,34 @@ export const useRightColumnSize = create<RightColumnSizeState>()(
   )
 )
 
+/** Toolkit grid (bashes/commands/.claude bottom section of the right
+ *  column) height in px. User drags the strip on its TOP edge to
+ *  resize; SessionsPanel above absorbs the delta via flex-1. */
+export const TOOLKIT_HEIGHT_MIN = 120
+export const TOOLKIT_HEIGHT_MAX = 1200
+export const TOOLKIT_HEIGHT_DEFAULT = 360
+
+interface ToolkitSizeState {
+  height: number
+  setHeight: (value: number) => void
+}
+
+export const useToolkitSize = create<ToolkitSizeState>()(
+  persist(
+    (set) => ({
+      height: TOOLKIT_HEIGHT_DEFAULT,
+      setHeight: (value) => {
+        const clamped = Math.min(
+          TOOLKIT_HEIGHT_MAX,
+          Math.max(TOOLKIT_HEIGHT_MIN, value)
+        )
+        set({ height: clamped })
+      }
+    }),
+    { name: 'hydra.toolkit-size' }
+  )
+)
+
 /** Orchestra Inspector drawer width. Mounted on the right edge; user
  *  drags its LEFT edge to resize. Min wide enough for the tab bar, max
  *  capped so the canvas stays usable. */

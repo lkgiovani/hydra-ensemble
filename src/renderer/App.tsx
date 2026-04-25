@@ -54,7 +54,11 @@ import {
   useRightPanel,
   useTerminalsPanel,
   TERMINALS_HEIGHT_MIN,
-  TERMINALS_HEIGHT_MAX
+  TERMINALS_HEIGHT_MAX,
+  useToolkitSize,
+  TOOLKIT_HEIGHT_MIN,
+  TOOLKIT_HEIGHT_MAX,
+  TOOLKIT_HEIGHT_DEFAULT
 } from './state/panels'
 import { isMac } from './lib/platform'
 import { useSessions } from './state/sessions'
@@ -107,6 +111,8 @@ export default function App() {
   const rightColumnWidth = useRightColumnSize((s) => s.width)
   const setRightColumnWidth = useRightColumnSize((s) => s.setWidth)
   const rightPanelHidden = useRightPanel((s) => s.hidden)
+  const toolkitHeight = useToolkitSize((s) => s.height)
+  const setToolkitHeight = useToolkitSize((s) => s.setHeight)
   const openPanel = useSlidePanel((s) => s.open)
   const closePanel = useSlidePanel((s) => s.close)
   const togglePanelFor = useSlidePanel((s) => s.toggle)
@@ -576,9 +582,58 @@ export default function App() {
                 <SessionsPanel />
               </div>
               <div
-                className="flex shrink-0 flex-col overflow-hidden border-t border-border-soft"
-                style={{ height: '45%' }}
+                className="relative flex shrink-0 flex-col overflow-hidden border-t border-border-soft"
+                style={{ height: toolkitHeight }}
               >
+                {/* Resize handle — grabbable 4px strip on the top edge.
+                    Drag up/down to resize the Toolkit; SessionsPanel
+                    above absorbs the delta via flex-1. Persisted in
+                    `useToolkitSize`; double-click to reset. */}
+                <div
+                  role="separator"
+                  aria-orientation="horizontal"
+                  aria-label="Resize toolkit panel"
+                  className="absolute left-0 right-0 top-0 z-20 h-1.5 cursor-row-resize bg-transparent transition-colors hover:bg-accent-500/40 active:bg-accent-500/60"
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    const startY = e.clientY
+                    const startHeight = toolkitHeight
+                    let rafId: number | null = null
+                    let latest = startHeight
+                    const onMove = (ev: MouseEvent): void => {
+                      // Drag UP grows the toolkit (negative delta);
+                      // drag DOWN shrinks it.
+                      latest = startHeight - (ev.clientY - startY)
+                      if (rafId !== null) return
+                      rafId = requestAnimationFrame(() => {
+                        rafId = null
+                        setToolkitHeight(
+                          Math.min(
+                            TOOLKIT_HEIGHT_MAX,
+                            Math.max(TOOLKIT_HEIGHT_MIN, latest)
+                          )
+                        )
+                      })
+                    }
+                    const onUp = (): void => {
+                      if (rafId !== null) cancelAnimationFrame(rafId)
+                      setToolkitHeight(
+                        Math.min(
+                          TOOLKIT_HEIGHT_MAX,
+                          Math.max(TOOLKIT_HEIGHT_MIN, latest)
+                        )
+                      )
+                      document.removeEventListener('mousemove', onMove)
+                      document.removeEventListener('mouseup', onUp)
+                      document.body.style.userSelect = ''
+                    }
+                    document.body.style.userSelect = 'none'
+                    document.addEventListener('mousemove', onMove)
+                    document.addEventListener('mouseup', onUp)
+                  }}
+                  onDoubleClick={() => setToolkitHeight(TOOLKIT_HEIGHT_DEFAULT)}
+                  title="Drag to resize · double-click to reset"
+                />
                 <ToolkitGrid
                   cwd={contextCwd}
                   activeSessionId={activeSession?.id ?? null}
